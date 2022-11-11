@@ -4,10 +4,8 @@
 // @version           2.3
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
-// @match             *://24.*/*
-// @match             *://24.*/hallUnit/*
-// @match             *://24.*/hallEnter/*
-// @match             *://ybj.shanxi.gov.cn/ybfw/*
+// @include           *://24.*
+// @include           *://ybj.shanxi.gov.cn/ybfw/*
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js
