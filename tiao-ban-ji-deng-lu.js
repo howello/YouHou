@@ -11,7 +11,7 @@
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js
-// @require           https://cdn.statically.io/gh/jaywcjlove/hotkeys/master/dist/hotkeys.min.js
+// @require           https://unpkg.com/hotkeys-js/dist/hotkeys.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
 // @resource          swalStyle https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.css
 // @run-at            document-body
