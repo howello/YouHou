@@ -14,6 +14,8 @@
 // @require           https://unpkg.com/hotkeys-js/dist/hotkeys.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
 // @resource          swalStyle https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.css
+// @updateURL         https://github.com/howello/YouHou/blob/master/tiao-ban-ji-deng-lu.js
+// @downloadURL       https://github.com/howello/YouHou/blob/master/tiao-ban-ji-deng-lu.js
 // @run-at            document-body
 // @grant             GM_openInTab
 // @grant             GM_setValue
