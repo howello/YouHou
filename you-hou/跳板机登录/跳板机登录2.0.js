@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           2.0
+// @version           2.1
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @match             *://24.*/*
