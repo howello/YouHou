@@ -3,9 +3,7 @@
 // @namespace         http://howe.com
 // @version           2.0
 // @author            howe
-// @description       跳板机登录
-// @match             *://24.*/*
-// @match             *://24.*/*
+// @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @match             *://24.*/*
 // @match             *://24.*/hallUnit/*
 // @match             *://24.*/hallEnter/*
@@ -23,6 +21,7 @@
 // @grant             GM_registerMenuCommand
 // @grant             GM_getResourceText
 // @icon              https://www.huawei.com/favicon.ico
+// @license           GPL-3.0-only
 // ==/UserScript==
 
 (function () {
