@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           2.1
+// @version           2.3
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @match             *://24.*/*
@@ -11,7 +11,7 @@
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js
-// @require           https://unpkg.com/hotkeys-js/dist/hotkeys.min.js
+// @require           https://cdn.bootcdn.net/ajax/libs/keymaster/1.6.1/keymaster.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
 // @resource          swalStyle https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.css
 // @updateURL         https://github.com/howello/YouHou/blob/master/tiao-ban-ji-deng-lu.js
@@ -405,8 +405,7 @@
     },
 
     addHotKey() {
-      hotkeys('f11', (event, handler) => {
-        event.preventDefault();
+      key('f11', function () {
         login.maximizeWindow()
       });
     },
