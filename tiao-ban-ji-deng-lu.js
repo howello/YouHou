@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           2.3
+// @version           2.5
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @include           *://24.*
@@ -200,14 +200,14 @@
       }
     },
     getEmpInsuInfo() {
+      let str = "<table border='1' id='addEmpInfo'>"
+      str += "<tr>" +
+          "    <th>名</th>" +
+          "    <th>值</th>" +
+          "  </tr>"
       let insuStr = window.localStorage.getItem("InsuEmpInfo")
       if (insuStr) {
         const insuEmpInfo = JSON.parse(insuStr)
-        let str = "<table border='1' id='addEmpInfo'>"
-        str += "<tr>" +
-            "    <th>名</th>" +
-            "    <th>值</th>" +
-            "  </tr>"
         for (let item in insuEmpInfo) {
           var name = dic.getEmpInsuDic().get(item)
           if (!name) {
@@ -228,16 +228,21 @@
           }
           str += "</td></tr>"
         }
-        let isInsured = window.localStorage.getItem("isInsured")
-        str += `<tr><td>是否参保</td><td style="table-layout:fixed; word-break:break-all">${isInsured}</td></tr>`
-        let isUploadCommitment = window.localStorage.getItem("isUploadCommitment")
-        str += `<tr><td>是否传过承诺书</td><td style="table-layout:fixed; word-break:break-all">${isUploadCommitment}</td></tr>`
-        str += `<tr><td>accessToken(前)</td><td style="table-layout:fixed; word-break:break-all">${$.cookie("service-mall-accesstoken")}</td></tr>`
-        str += `<tr><td>accessToken(后)</td><td>${util.decrypt($.cookie("service-mall-accesstoken"), true)}</td></tr>`
-        str += "</table>"
-        return str
       }
-      return null
+      let isInsured = window.localStorage.getItem("isInsured")
+      if (isInsured == null) {
+        isInsured = "无数据"
+      }
+      str += `<tr><td>是否参保</td><td style="table-layout:fixed; word-break:break-all">${isInsured}</td></tr>`
+      let isUploadCommitment = window.localStorage.getItem("isUploadCommitment")
+      if (isUploadCommitment == null) {
+        isUploadCommitment = "无数据"
+      }
+      str += `<tr><td>是否传过承诺书</td><td style="table-layout:fixed; word-break:break-all">${isUploadCommitment}</td></tr>`
+      str += `<tr><td>accessToken(前)</td><td style="table-layout:fixed; word-break:break-all">${$.cookie("service-mall-accesstoken")}</td></tr>`
+      str += `<tr><td>accessToken(后)</td><td>${util.decrypt($.cookie("service-mall-accesstoken"), true)}</td></tr>`
+      str += "</table>"
+      return str
     },
   };
 
@@ -405,6 +410,7 @@
     addHotKey() {
       key('f11', function () {
         login.maximizeWindow()
+        return false
       });
     },
 
