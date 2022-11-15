@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           2.5
+// @version           2.7
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @include           *://24.*
 // @include           *://ybj.shanxi.gov.cn/ybfw/*
+// @include           *://*huaweicitycloud.com/*
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js
@@ -29,7 +30,7 @@
 
   const customClass = {
     container: 'panai-container',
-    popup: 'panai-popup',
+    popup: 'panai-popup'
   };
 
   let toast = Swal.mixin({
@@ -66,6 +67,9 @@
       let key = "i1dS4PJXv612krF0"
       if (isToken) {
         key = "SiIiqxyoDXuxbnGv"
+      }
+      if (!s) {
+        return ""
       }
       var e = CryptoJS.enc.Utf8.parse(key);
       var a = CryptoJS.AES.decrypt(s, e, {
@@ -363,6 +367,85 @@
         }, 200)
       }
     },
+    loginConsole() {
+      const href = window.location.href
+      var loginConsoleEnabled = util.getValue('setting_auto_login_console')
+      let consoleList = JSON.parse(util.getValue("console_list"))
+      for (let item of consoleList) {
+        if (loginConsoleEnabled && href.includes(item.addr)) {
+          var child0 = item.child[0]
+          let child1 = item.child[1]
+          Swal.fire({
+            type: 'question',
+            icon: 'question',
+            text: "请选择一个需要登录的环境",
+            showCloseButton: true,
+            showCancelButton: true,
+            showConfirmButton: true,
+            confirmButtonText: child0.desc + '环境',
+            cancelButtonText: child1.desc + '环境',
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            customClass
+          }).then((res) => {
+            if (res.value) {
+              login.doLoginConsole(child0.username, child0.email, child0.password)
+            } else {
+              login.doLoginConsole(child1.username, child1.email, child1.password)
+            }
+          });
+        }
+      }
+    },
+    doLoginConsole(username, email, password) {
+      //1. 判断当前是子账户还是主账户
+      let title = $(`.loginTypeNoSelected:first`).text().trim()
+      util.clog("title===" + title)
+      if (!title) {
+        setTimeout(function () {
+          login.loginConsole(username, email, password)
+        }, 300)
+        return
+      }
+
+      if (title.includes("帐户登录")) {
+        toast.fire({
+          toast: true,
+          position: 'top',
+          showCancelButton: false,
+          showConfirmButton: false,
+          title: "请手动切换到子用户登录",
+          icon: 'success',
+          timer: 2000,
+          customClass
+        })
+        setTimeout(function () {
+          login.loginConsole(username, email, password)
+        }, 2000)
+        return
+      }
+      //2. 输入三个值
+
+      let usernameId = "usernameId"
+      let emailId = "emailId"
+      let passwordId = "passwordId"
+      let usernameCmd = `input.tiny-input-text:first`
+      let emailCmd = `input.tiny-input-text:eq(1)`
+      let passwordCmd = `input.tiny-input-text:last`
+
+      $(usernameCmd).attr("id", usernameId)
+      $(emailCmd).attr("id", emailId)
+      $(passwordCmd).attr("id", passwordId)
+
+      util.keyInput(usernameId, username)
+      util.keyInput(emailId, email)
+      util.keyInput(passwordId, password)
+
+      //3. 点击登录
+      let loginBtnCmd = `#loginBtn`
+      $(loginBtnCmd).click()
+    }
+
   };
 
   let main = {
@@ -381,10 +464,16 @@
         name: 'inject_information_list',
         value: '[{"keywords":"/hallUnit"}]'
       }, {
+        name: 'console_list',
+        value: '[{"addr":"xxx.com","child":[{"desc":"生产","username":"SXYB","email":"yy06","password":"12345"},{"desc":"测试","username":"SXYB","email":"yy06","password":"12345"}]},{"addr":"xxx.com","child":[{"desc":"生产","username":"SXYB","email":"yy06","password":"12345"},{"desc":"测试","username":"SXYB","email":"yy06","password":"12345"}]}]'
+      }, {
         name: 'setting_auto_login_bao_lei',
         value: false
       }, {
         name: 'setting_auto_login_windows',
+        value: false
+      }, {
+        name: 'setting_auto_login_console',
         value: false
       }, {
         name: 'setting_auto_maximize',
@@ -468,6 +557,14 @@
                               class="panai-setting-checkbox"></label>
                         </div>
                     </div>
+                    <div style="height: 100px">
+                        <div style="width: 40%;float: left;">
+                              <label class="panai-setting-label" style="border-bottom: 1px solid">Console自动登录<input type="checkbox" id="A-Console" ${util.getValue('setting_auto_login_console') ? 'checked' : ''} class="panai-setting-checkbox"></label>
+                        </div >
+                        <div style="width: 20%;"></div>
+                        <div style="width: 40%;float: right;">
+                        </div>
+                    </div>
                     <label><span>下面的设置项，请拷贝出去修改再粘贴回来。Json在线格式化：<a href="https://www.bejson.com/">https://www.bejson.com/</a></span></label>
                     
                     <label class="panai-setting-label" id="A-BaoLei-List-Wrapper" ><span>堡垒机列表</span>
@@ -475,6 +572,9 @@
                     </label>
                     <label class="panai-setting-label" id="A-Windows-List-Wrapper" ><span>跳板机列表</span>
                     <textarea id="A-Windows-List" cols="80" rows="5">${util.getValue('windows_list')}</textarea>
+                    </label>
+                    <label class="panai-setting-label" id="A-Console-List-Wrapper" ><span>Console列表</span>
+                    <textarea id="A-Console-List" cols="80" rows="5">${util.getValue('console_list')}</textarea>
                     </label>
                     <label class="panai-setting-label" id="A-Max-List-Wrapper" ><span>F11最大化列表</span>
                     <textarea id="A-Max-List" cols="80" rows="5">${util.getValue('maximize_windows_list')}</textarea>
@@ -500,6 +600,9 @@
       document.getElementById('A-Windows').addEventListener('change', (e) => {
         util.setValue('setting_auto_login_windows', e.target.checked);
       });
+      document.getElementById('A-Console').addEventListener('change', (e) => {
+        util.setValue('setting_auto_login_console', e.target.checked);
+      });
       document.getElementById('A-Max').addEventListener('change', (e) => {
         util.setValue('setting_auto_maximize', e.target.checked);
       });
@@ -513,6 +616,10 @@
       document.getElementById('A-Windows-List').addEventListener('change', (e) => {
         util.setValue('windows_list', e.target.value);
         document.getElementById('A-Windows-List').innerText = e.target.value;
+      });
+      document.getElementById('A-Console-List').addEventListener('change', (e) => {
+        util.setValue('console_list', e.target.value);
+        document.getElementById('A-Console-List').innerText = e.target.value;
       });
       document.getElementById('A-Max-List').addEventListener('change', (e) => {
         util.setValue('maximize_windows_list', e.target.value);
@@ -530,6 +637,9 @@
       });
       GM_registerMenuCommand('👀 跳板机自动登录：【' + util.getValue('setting_auto_login_windows') + '】', () => {
         this.toggleEnableFunc('setting_auto_login_windows');
+      });
+      GM_registerMenuCommand('👀 Console自动登录：【' + util.getValue('setting_auto_login_console') + '】', () => {
+        this.toggleEnableFunc('setting_auto_login_console');
       });
       GM_registerMenuCommand('👀 F11自动最大化：【' + util.getValue('setting_auto_maximize') + '】', () => {
         this.toggleEnableFunc('setting_auto_maximize');
@@ -582,6 +692,8 @@
           login.loginWindows(item.ip, item.username, item.password)
         }
       }
+
+      login.loginConsole()
     },
 
     init() {
