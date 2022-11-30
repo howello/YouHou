@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           2.7
+// @version           3.0
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @include           *://24.*
@@ -13,8 +13,6 @@
 // @require           https://cdn.bootcdn.net/ajax/libs/keymaster/1.6.1/keymaster.min.js
 // @require           https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
 // @resource          swalStyle https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.css
-// @updateURL         https://github.com/howello/YouHou/blob/master/tiao-ban-ji-deng-lu.js
-// @downloadURL       https://github.com/howello/YouHou/blob/master/tiao-ban-ji-deng-lu.js
 // @run-at            document-body
 // @grant             GM_openInTab
 // @grant             GM_setValue
@@ -270,7 +268,6 @@
   };
 
   let login = {
-
     inputDialogPass(username, password) {
       let howeUser = "howeUser"
       let howePass = "howePass"
@@ -298,7 +295,6 @@
         }, 200)
       }
     },
-
     maximizeWindow() {
       var autoMaxEnabled = util.getValue('setting_auto_maximize')
       if (!autoMaxEnabled) {
@@ -306,7 +302,6 @@
       }
       const href = window.location.href
       let maximizeWindowsList = JSON.parse(util.getValue("maximize_windows_list"))
-
       for (let item of maximizeWindowsList) {
         if (href.includes(item.addr)) {
           var full = $('.toolBox:last>.rightButton:first> button')
@@ -323,7 +318,33 @@
         }
       }
     },
-    loginWindows(ip, username, password) {
+    loginWindows() {
+      const href = window.location.href
+      var loginWindowsEnabled = util.getValue('setting_auto_login_windows')
+      let windowsList = JSON.parse(util.getValue("windows_list"))
+      for (let item of windowsList) {
+        if (loginWindowsEnabled && href.includes(item.addr)) {
+          Swal.fire({
+            type: 'question',
+            icon: 'question',
+            text: "是否自动登录" + item.ip + "？",
+            showCloseButton: true,
+            showCancelButton: true,
+            showConfirmButton: true,
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            customClass
+          }).then((res) => {
+            if (res.value) {
+              login.doLoginWindows(item.username, item.password, item.ip)
+            }
+          });
+        }
+      }
+    },
+    doLoginWindows(username, password, ip) {
       util.clog("开始登录")
       let cmd = `tr.el-table__row`
       var t = $(cmd).text()
@@ -342,29 +363,66 @@
         login.inputDialogPass(username, password)
       } else {
         util.clog("地址没找到，递归")
-        setTimeout(function () {
-          login.loginWindows(ip, username, password)
-        }, 200)
+        toast.fire({
+          toast: true,
+          position: 'top',
+          showCancelButton: false,
+          showConfirmButton: false,
+          title: "地址没找到，请手动登录一次",
+          icon: 'success',
+          timer: 2000,
+          customClass
+        })
       }
     },
-    loginBaoLei(name, pass) {
+    loginBaoLei() {
+      const href = window.location.href
+      var loginBaoLeiEnabled = util.getValue('setting_auto_login_bao_lei')
+      let baoLeiList = JSON.parse(util.getValue("bao_lei_list"))
+      for (let item of baoLeiList) {
+        if (loginBaoLeiEnabled && href.includes(item.addr)) {
+          Swal.fire({
+            type: 'question',
+            icon: 'question',
+            text: "是否自动登录" + item.username + "？",
+            showCloseButton: true,
+            showCancelButton: true,
+            showConfirmButton: true,
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            customClass
+          }).then((res) => {
+            if (res.value) {
+              login.doLoginBaoLei(item.username, item.password)
+            }
+          });
+        }
+      }
+    },
+    doLoginBaoLei(username, password) {
       var loginBtn = $('[huawei="true"]:first button :contains("登录")')
       if (loginBtn.text()) {
         util.clog("开始登录堡垒机")
-        $('input[name="username"]').val(name)
+        $('input[name="username"]').val(username)
         util.clog("输入堡垒机账号成功")
-        $('input[name="pwd"]').val(pass)
+        $('input[name="pwd"]').val(password)
         util.clog("输入堡垒机密码成功")
         loginBtn.click()
         util.clog("堡垒机登录成功")
-        setTimeout(function () {
-          history.go(0);
-        }, 300)
       } else {
-        util.clog("登录堡垒机按钮没找到，递归")
-        setTimeout(function () {
-          login.loginBaoLei(name, pass)
-        }, 200)
+        toast.fire({
+          toast: true,
+          position: 'top',
+          showCancelButton: false,
+          showConfirmButton: false,
+          title: "请等待页面加载完成再点击",
+          icon: 'success',
+          timer: 2000,
+          customClass
+        })
+        login.loginBaoLei()
       }
     },
     loginConsole() {
@@ -390,7 +448,7 @@
           }).then((res) => {
             if (res.value) {
               login.doLoginConsole(child0.username, child0.email, child0.password)
-            } else {
+            } else if (res.dismiss.includes("cancel")) {
               login.doLoginConsole(child1.username, child1.email, child1.password)
             }
           });
@@ -676,23 +734,8 @@
     },
 
     execCommand() {
-      const href = window.location.href
-      var loginBaoLeiEnabled = util.getValue('setting_auto_login_bao_lei')
-      var loginWindowsEnabled = util.getValue('setting_auto_login_windows')
-      let baoLeiList = JSON.parse(util.getValue("bao_lei_list"))
-      let windowsList = JSON.parse(util.getValue("windows_list"))
-      for (let item of baoLeiList) {
-        if (loginBaoLeiEnabled && href.includes(item.addr)) {
-          login.loginBaoLei(item.username, item.password)
-        }
-      }
-
-      for (let item of windowsList) {
-        if (loginWindowsEnabled && href.includes(item.addr)) {
-          login.loginWindows(item.ip, item.username, item.password)
-        }
-      }
-
+      login.loginBaoLei()
+      login.loginWindows()
       login.loginConsole()
     },
 
