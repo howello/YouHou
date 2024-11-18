@@ -1,18 +1,18 @@
 // ==UserScript==
 // @name              跳板机登录
 // @namespace         http://howe.com
-// @version           3.0
+// @version           4.1
 // @author            howe
 // @description       本脚本是用于堡垒机的自动登录、跳板机的自动登录、网厅信息注入及其他功能。需要事先配置方可使用。
 // @include           *://24.*
 // @include           *://ybj.shanxi.gov.cn/ybfw/*
 // @include           *://*huaweicitycloud.com/*
-// @require           https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js
-// @require           https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.min.js
-// @require           https://cdn.bootcdn.net/ajax/libs/crypto-js/4.1.1/crypto-js.min.js
-// @require           https://cdn.bootcdn.net/ajax/libs/keymaster/1.6.1/keymaster.min.js
-// @require           https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
-// @resource          swalStyle https://cdn.bootcdn.net/ajax/libs/limonte-sweetalert2/11.6.4/sweetalert2.css
+// @require           https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js
+// @require           https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.14.5/sweetalert2.min.js
+// @require           https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
+// @require           https://cdnjs.cloudflare.com/ajax/libs/keymaster/1.6.1/keymaster.min.js
+// @require           https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js
+// @resource          swalStyle https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.14.5/sweetalert2.css
 // @run-at            document-body
 // @grant             GM_openInTab
 // @grant             GM_setValue
@@ -23,7 +23,7 @@
 // @license           GPL-3.0-only
 // ==/UserScript==
 
-(function () {
+$(function () {
   'use strict';
 
   const customClass = {
@@ -409,6 +409,8 @@
         util.clog("输入堡垒机账号成功")
         $('input[name="pwd"]').val(password)
         util.clog("输入堡垒机密码成功")
+        $(`.loginByUsername-cell .el-checkbox__input.is-checked input.el-checkbox__original :contains("记住登录名")`).click()
+        util.clog("点击记住登录名成功")
         loginBtn.click()
         util.clog("堡垒机登录成功")
       } else {
@@ -467,20 +469,21 @@
       }
 
       if (title.includes("帐户登录")) {
-        toast.fire({
-          toast: true,
-          position: 'top',
-          showCancelButton: false,
-          showConfirmButton: false,
-          title: "请手动切换到子用户登录",
-          icon: 'success',
-          timer: 2000,
-          customClass
-        })
-        setTimeout(function () {
-          login.loginConsole(username, email, password)
-        }, 2000)
-        return
+        // toast.fire({
+        //   toast: true,
+        //   position: 'top',
+        //   showCancelButton: false,
+        //   showConfirmButton: false,
+        //   title: "请手动切换到子用户登录",
+        //   icon: 'success',
+        //   timer: 2000,
+        //   customClass
+        // })
+        $(`#subUserLogin`).click()
+        // setTimeout(function () {
+        //   login.loginConsole(username, email, password)
+        // }, 2000)
+        // return
       }
       //2. 输入三个值
 
@@ -496,8 +499,13 @@
       $(passwordCmd).attr("id", passwordId)
 
       util.keyInput(usernameId, username)
+      util.clog("输入账号成功")
       util.keyInput(emailId, email)
+      util.clog("输入email成功")
       util.keyInput(passwordId, password)
+      util.clog("输入密码成功")
+      $(`#checkArea`).click()
+      util.clog("点击记住登录名成功")
 
       //3. 点击登录
       let loginBtnCmd = `#loginBtn`
@@ -751,4 +759,4 @@
   }
 
   main.init();
-})();
+})
