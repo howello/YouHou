@@ -1,0 +1,651 @@
+<html lang="zh-CN"><head>
+    <meta charset="utf-8">
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Demand</title>
+    <link rel="shortcut icon" href="/bos/image/logo-blue.png" type="image/x-icon">
+    <link rel="stylesheet" href="/bos/plugin/layui/css/layui.css">
+    <link rel="stylesheet" href="/bos/plugin/aliconfont/iconfont.css">
+    <link rel="stylesheet" href="/bos/common/common.css">
+    <script src="/bos/plugin/layui/layui.js"></script><style type="text/css" abt="234"></style>
+    <script src="/bos/common/common.js"></script>
+    <link rel="stylesheet" href="/bos/css/demand/demandTab.css">
+    <script src="/bos/js/demand/demandTab.js"></script>
+    <script>
+        /*<![CDATA[*/
+
+        const USER_ID = "426670450182066176"; // 因为 Long 在 JS 中的精度问题，所以转为字符串
+        const ROLE_CODE = "engineer"; // 当前 roleCode
+
+        /*]]>*/
+    </script>
+<script></script><style data-id="immersive-translate-input-injected-css">.immersive-translate-input {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 2147483647;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.immersive-translate-attach-loading::after {
+  content: " ";
+
+  --loading-color: #f78fb6;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: block;
+  margin: 12px auto;
+  position: relative;
+  color: white;
+  left: -100px;
+  box-sizing: border-box;
+  animation: immersiveTranslateShadowRolling 1.5s linear infinite;
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-2000%, -50%);
+  z-index: 100;
+}
+
+.immersive-translate-loading-spinner {
+  vertical-align: middle !important;
+  width: 10px !important;
+  height: 10px !important;
+  display: inline-block !important;
+  margin: 0 4px !important;
+  border: 2px rgba(221, 244, 255, 0.6) solid !important;
+  border-top: 2px rgba(0, 0, 0, 0.375) solid !important;
+  border-left: 2px rgba(0, 0, 0, 0.375) solid !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  -webkit-animation: immersive-translate-loading-animation 0.6s infinite linear !important;
+  animation: immersive-translate-loading-animation 0.6s infinite linear !important;
+}
+
+@-webkit-keyframes immersive-translate-loading-animation {
+  from {
+    -webkit-transform: rotate(0deg);
+  }
+
+  to {
+    -webkit-transform: rotate(359deg);
+  }
+}
+
+@keyframes immersive-translate-loading-animation {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(359deg);
+  }
+}
+
+.immersive-translate-input-loading {
+  --loading-color: #f78fb6;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: block;
+  margin: 12px auto;
+  position: relative;
+  color: white;
+  left: -100px;
+  box-sizing: border-box;
+  animation: immersiveTranslateShadowRolling 1.5s linear infinite;
+}
+
+@keyframes immersiveTranslateShadowRolling {
+  0% {
+    box-shadow: 0px 0 rgba(255, 255, 255, 0), 0px 0 rgba(255, 255, 255, 0),
+      0px 0 rgba(255, 255, 255, 0), 0px 0 rgba(255, 255, 255, 0);
+  }
+
+  12% {
+    box-shadow: 100px 0 var(--loading-color), 0px 0 rgba(255, 255, 255, 0),
+      0px 0 rgba(255, 255, 255, 0), 0px 0 rgba(255, 255, 255, 0);
+  }
+
+  25% {
+    box-shadow: 110px 0 var(--loading-color), 100px 0 var(--loading-color),
+      0px 0 rgba(255, 255, 255, 0), 0px 0 rgba(255, 255, 255, 0);
+  }
+
+  36% {
+    box-shadow: 120px 0 var(--loading-color), 110px 0 var(--loading-color),
+      100px 0 var(--loading-color), 0px 0 rgba(255, 255, 255, 0);
+  }
+
+  50% {
+    box-shadow: 130px 0 var(--loading-color), 120px 0 var(--loading-color),
+      110px 0 var(--loading-color), 100px 0 var(--loading-color);
+  }
+
+  62% {
+    box-shadow: 200px 0 rgba(255, 255, 255, 0), 130px 0 var(--loading-color),
+      120px 0 var(--loading-color), 110px 0 var(--loading-color);
+  }
+
+  75% {
+    box-shadow: 200px 0 rgba(255, 255, 255, 0), 200px 0 rgba(255, 255, 255, 0),
+      130px 0 var(--loading-color), 120px 0 var(--loading-color);
+  }
+
+  87% {
+    box-shadow: 200px 0 rgba(255, 255, 255, 0), 200px 0 rgba(255, 255, 255, 0),
+      200px 0 rgba(255, 255, 255, 0), 130px 0 var(--loading-color);
+  }
+
+  100% {
+    box-shadow: 200px 0 rgba(255, 255, 255, 0), 200px 0 rgba(255, 255, 255, 0),
+      200px 0 rgba(255, 255, 255, 0), 200px 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.immersive-translate-toast {
+  display: flex;
+  position: fixed;
+  z-index: 2147483647;
+  left: 0;
+  right: 0;
+  top: 1%;
+  width: fit-content;
+  padding: 12px 20px;
+  margin: auto;
+  overflow: auto;
+  background: #fef6f9;
+  box-shadow: 0px 4px 10px 0px rgba(0, 10, 30, 0.06);
+  font-size: 15px;
+  border-radius: 8px;
+  color: #333;
+}
+
+.immersive-translate-toast-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.immersive-translate-toast-hidden {
+  margin: 0 20px 0 72px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.immersive-translate-toast-close {
+  color: #666666;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+@media screen and (max-width: 768px) {
+  .immersive-translate-toast {
+    top: 0;
+    padding: 12px 0px 0 10px;
+  }
+  .immersive-translate-toast-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  .immersive-translate-toast-hidden {
+    margin: 10px auto;
+  }
+}
+
+.immersive-translate-dialog {
+  position: fixed;
+  z-index: 2147483647;
+  left: 0;
+  top: 0;
+  display: flex;
+  width: 300px;
+  flex-direction: column;
+  align-items: center;
+  font-size: 15px;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  margin: auto;
+  height: fit-content;
+  border-radius: 20px;
+  background-color: #fff;
+}
+
+.immersive-translate-modal {
+  display: none;
+  position: fixed;
+  z-index: 2147483647;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgb(0, 0, 0);
+  background-color: rgba(0, 0, 0, 0.4);
+  font-size: 15px;
+}
+
+.immersive-translate-modal-content {
+  background-color: #fefefe;
+  margin: 10% auto;
+  padding: 40px 24px 24px;
+  border-radius: 12px;
+  width: 350px;
+  font-family: system-ui, -apple-system, "Segoe UI", "Roboto", "Ubuntu",
+    "Cantarell", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  position: relative;
+}
+
+@media screen and (max-width: 768px) {
+  .immersive-translate-modal-content {
+    margin: 25% auto !important;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .immersive-translate-modal-content {
+    width: 80vw !important;
+    margin: 20vh auto !important;
+    padding: 20px 12px 12px !important;
+  }
+
+  .immersive-translate-modal-title {
+    font-size: 14px !important;
+  }
+
+  .immersive-translate-modal-body {
+    font-size: 13px !important;
+    max-height: 60vh !important;
+  }
+
+  .immersive-translate-btn {
+    font-size: 13px !important;
+    padding: 8px 16px !important;
+    margin: 0 4px !important;
+  }
+
+  .immersive-translate-modal-footer {
+    gap: 6px !important;
+    margin-top: 16px !important;
+  }
+}
+
+.immersive-translate-modal .immersive-translate-modal-content-in-input {
+  max-width: 500px;
+}
+.immersive-translate-modal-content-in-input .immersive-translate-modal-body {
+  text-align: left;
+  max-height: unset;
+}
+
+.immersive-translate-modal-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.immersive-translate-modal-body {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  margin-top: 24px;
+  word-break: break-all;
+}
+
+@media screen and (max-width: 768px) {
+  .immersive-translate-modal-body {
+    max-height: 250px;
+    overflow-y: auto;
+  }
+}
+
+.immersive-translate-close {
+  color: #666666;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.immersive-translate-close:hover,
+.immersive-translate-close:focus {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.immersive-translate-modal-footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.immersive-translate-btn {
+  width: fit-content;
+  color: #fff;
+  background-color: #ea4c89;
+  border: none;
+  font-size: 14px;
+  margin: 0 8px;
+  padding: 9px 30px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.immersive-translate-btn-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.immersive-translate-btn:hover {
+  background-color: #f082ac;
+}
+.immersive-translate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.immersive-translate-btn:disabled:hover {
+  background-color: #ea4c89;
+}
+
+.immersive-translate-link-btn {
+  background-color: transparent;
+  color: #ea4c89;
+  border: none;
+  cursor: pointer;
+  height: 30px;
+  line-height: 30px;
+}
+
+.immersive-translate-cancel-btn {
+  /* gray color */
+  background-color: rgb(89, 107, 120);
+}
+
+.immersive-translate-cancel-btn:hover {
+  background-color: hsl(205, 20%, 32%);
+}
+
+.immersive-translate-action-btn {
+  background-color: transparent;
+  color: #ea4c89;
+  border: 1px solid #ea4c89;
+}
+
+.immersive-translate-btn svg {
+  margin-right: 5px;
+}
+
+.immersive-translate-link {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+  text-decoration: none;
+  color: #ea4c89;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+.immersive-translate-primary-link {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+  text-decoration: none;
+  color: #ea4c89;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+.immersive-translate-modal input[type="radio"] {
+  margin: 0 6px;
+  cursor: pointer;
+}
+
+.immersive-translate-modal label {
+  cursor: pointer;
+}
+
+.immersive-translate-close-action {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  cursor: pointer;
+}
+
+.imt-image-status {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 16px !important;
+}
+.imt-image-status img,
+.imt-image-status svg,
+.imt-img-loading {
+  width: 28px !important;
+  height: 28px !important;
+  margin: 0 0 8px 0 !important;
+  min-height: 28px !important;
+  min-width: 28px !important;
+  position: relative !important;
+}
+.imt-img-loading {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAMAAACfWMssAAAAtFBMVEUAAAD////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////oK74hAAAAPHRSTlMABBMIDyQXHwyBfFdDMSw+OjXCb+5RG51IvV/k0rOqlGRM6KKMhdvNyZBz9MaupmxpWyj437iYd/yJVNZeuUC7AAACt0lEQVRIx53T2XKiUBCA4QYOiyCbiAsuuGBcYtxiYtT3f6/pbqoYHVFO5r+iivpo6DpAWYpqeoFfr9f90DsYAuRSWkFnPO50OgR9PwiCUFcl2GEcx+N/YBh6pvKaefHlUgZd1zVe0NbYcQjGBfzrPE8Xz8aF+71D8gG6DHFPpc4a7xFiCDuhaWgKgGIJQ3d5IMGDrpS4S5KgpIm+en9f6PlAhKby4JwEIxlYJV9h5k5nee9GoxHJ2IDSNB0dwdad1NAxDJ/uXDHYmebdk4PdbkS58CIVHdYSUHTYYRWOJblWSyu2lmy3KNFVJNBhxcuGW4YBVCbYGRZwIooipHsNqjM4FbgOQqQqSKQQU9V8xmi1QlgHqQQ6DDBvRUVCDirs+EzGDGOQTCATgtYTnbCVLgsVgRE0T1QE0qHCFAht2z6dLvJQs3Lo2FQoDxWNUiBhaP4eRgwNkI+dAjVOA/kUrIDwf3CG8NfNOE0eiFotSuo+rBiq8tD9oY4Qzc6YJw99hl1wzpQvD7ef2M8QgnOGJfJw+EltQc+oX2yn907QB22WZcvlUpd143dqQu+8pCJZuGE4xCuPXJqqcs5sNpsI93Rmzym1k4Npk+oD1SH3/a3LOK/JpUBpWfqNySxWzCfNCUITuDG5dtuphrUJ1myeIE9bIsPiKrfqTai5WZxbhtNphYx6GEIHihyGFTI69lje/rxajdh0s0msZ0zYxyPLhYCb1CyHm9Qsd2H37Y3lugVwL9kNh8Ot8cha6fUNQ8nuXi5z9/ExsAO4zQrb/ev1yrCB7lGyQzgYDGuxq1toDN/JGvN+HyWNHKB7zEoK+PX11e12G431erGYzwmytAWU56fkMHY5JJnDRR2eZji3AwtIcrEV8Cojat/BdQ7XOwGV1e1hDjGGjXbdArm8uJZtCH5MbcctVX8A1WpqumJHwckAAAAASUVORK5CYII=");
+  background-size: 28px 28px;
+  animation: image-loading-rotate 1s linear infinite !important;
+}
+
+.imt-image-status span {
+  color: var(--bg-2, #fff) !important;
+  font-size: 14px !important;
+  line-height: 14px !important;
+  font-weight: 500 !important;
+  font-family: "PingFang SC", Arial, sans-serif !important;
+}
+
+.imt-primary-button {
+  display: flex;
+  padding: 12px 80px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: #ea4c89;
+  color: #fff;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 24px;
+  border: none;
+  cursor: pointer;
+}
+
+.imt-retry-text {
+  color: #999;
+  text-align: center;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 21px;
+  cursor: pointer;
+}
+
+.imt-action-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.imt-modal-content-text {
+  text-align: left;
+  color: #333;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+@keyframes image-loading-rotate {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.imt-linear-gradient-text {
+  background: linear-gradient(90deg, #00a6ff 0%, #c369ff 52.4%, #ff4590 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.imt-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.imt-linear-black-btn {
+  border-radius: 50px;
+  background: linear-gradient(66deg, #222 19%, #696969 94.25%);
+  height: 48px;
+  width: 100%;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  justify-content: center;
+}
+</style></head>
+<body>
+<div class="layui-fluid">
+    <form id="new-demand-form" class="layui-form" lay-filter="modify-form">
+        <input type="hidden" name="id">
+        <div class="layui-form-item">
+            <div class="layui-inline project">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>项目名称</label>
+                <div class="layui-input-block">
+                    <select name="projectCode" lay-filter="project" lay-verify="required"><option value=""></option><option value="Shanxi_MIC">山西省医保中心项目</option></select><div class="layui-unselect layui-form-select"><div class="layui-select-title"><input type="text" placeholder="请选择" value="" readonly="" class="layui-input layui-unselect"><i class="layui-edge"></i></div><dl class="layui-anim layui-anim-upbit"><dd lay-value="" class="layui-select-tips">请选择</dd><dd lay-value="Shanxi_MIC" class="">山西省医保中心项目</dd></dl></div>
+                </div>
+            </div>
+            <div id="demand-type" class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>需求类型</label>
+                <div class="layui-input-block"><input type="radio" name="demandType" value="BUG" title="错误修正" lay-filter="demand-type" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>错误修正</div></div><input type="radio" name="demandType" value="IMPROVE" title="功能改进" lay-filter="demand-type" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>功能改进</div></div><input type="radio" name="demandType" value="NEW" title="新项开发" lay-filter="demand-type" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>新项开发</div></div></div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div id="urgency" class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>紧急程度</label>
+                <div class="layui-input-block"><input type="radio" name="urgency" value="AVERAGE" title="一般" lay-verify="checkRequired" checked=""><div class="layui-unselect layui-form-radio layui-form-radioed"><i class="layui-anim layui-icon layui-icon-radio"></i><div>一般</div></div><input type="radio" name="urgency" value="URGENT" title="紧急" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>紧急</div></div><input type="radio" name="urgency" value="MORE_URGENT" title="加急" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>加急</div></div><input type="radio" name="urgency" value="ACCEPTANCE" title="影响验收" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>影响验收</div></div></div>
+            </div>
+            <div id="append" class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>是否补提</label>
+                <div class="layui-input-block">
+                    <input type="radio" name="append" value="Y" title="是" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>是</div></div>
+                    <input type="radio" name="append" value="N" title="否" lay-verify="checkRequired" checked=""><div class="layui-unselect layui-form-radio layui-form-radioed"><i class="layui-anim layui-icon layui-icon-radio"></i><div>否</div></div>
+                </div>
+            </div>
+            <div id="week" class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>周</label>
+                <div class="layui-input-block">
+                    <input type="radio" name="weekFlag" value="0" title="本周" lay-verify="checkRequired" checked=""><div class="layui-unselect layui-form-radio layui-form-radioed"><i class="layui-anim layui-icon layui-icon-radio"></i><div>本周</div></div>
+                    <input type="radio" name="weekFlag" value="-1" title="上周" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>上周</div></div>
+                    <input type="radio" name="weekFlag" value="-2" title="前周" lay-verify="checkRequired"><div class="layui-unselect layui-form-radio"><i class="layui-anim layui-icon layui-icon-circle"></i><div>前周</div></div>
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>需求名称</label>
+                <div class="layui-input-block">
+                    <textarea name="demandName" placeholder="请输入需求名称" class="layui-textarea" lay-verify="required|checkRepeat"></textarea>
+                </div>
+            </div>
+            <div id="background" class="layui-inline layui-form-text">
+                <label class="layui-form-label"><span class="iconfont"></span>需求背景</label>
+                <div class="layui-input-block">
+                    <textarea name="background" placeholder="请输入需求背景" class="layui-textarea"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item ">
+            <div class="layui-inline layui-form-text">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>使用环境</label>
+                <div class="layui-input-block">
+                    <textarea name="environment" placeholder="请输入使用环境" class="layui-textarea" lay-verify="required|checkRepeat"></textarea>
+                </div>
+            </div>
+            <div id="status-quo" class="layui-inline layui-form-text">
+                <label class="layui-form-label"><span class="iconfont"></span>现状/问题</label>
+                <div class="layui-input-block">
+                    <textarea name="statusQuo" placeholder="请输入现状/问题" class="layui-textarea"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item ">
+            <div id="recurrence" class="layui-inline layui-form-text">
+                <label class="layui-form-label"><span class="iconfont"></span>复现过程</label>
+                <div class="layui-input-block">
+                    <textarea name="recurrence" placeholder="请输入复现过程" class="layui-textarea"></textarea>
+                </div>
+            </div>
+            <div class="layui-inline layui-form-text">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>需求目标</label>
+                <div class="layui-input-block">
+                    <textarea name="target" placeholder="请输入需求目标" class="layui-textarea" lay-verify="required|checkRepeat"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="layui-form-item">
+            <div class="layui-inline  layui-form-text">
+                <label class="layui-form-label"><span class="iconfont"></span>建议方案</label>
+                <div class="layui-input-block">
+                    <textarea name="suggestion" placeholder="请输入建议方案" class="layui-textarea"></textarea>
+                </div>
+            </div>
+            <div id="assignee" class="layui-inline">
+                <label class="layui-form-label"><span class="iconfont icon-bitianxiang-"></span>预计分配人</label>
+                <div class="layui-input-block">
+                    <select name="assignee" lay-verify="required"><option value="426670450228203520">陈汉林</option><option value="426670450224009216">程宝</option><option value="426670450194649088">付联霞</option><option value="426670450286923776">关欣朋</option><option value="426670450119151616">郭子文</option><option value="426670450131734528">何文亮</option><option value="426670450240786432">黄菊</option><option value="426670450253369344">江山</option><option value="426670450106568704">靳圣晨</option><option value="426670450236592128">鞠强</option><option value="426670450064625664">寇祥</option><option value="426670450152706048">李滨0927</option><option value="426670450186260480">李超群</option><option value="426670450203037696">李磊政</option><option value="426670450135928832">李路</option><option value="426670450089791488">李鹏</option><option value="426670450077208576">李群</option><option value="1822945599071207425">李涛1107</option><option value="426670450073014272">李文品</option><option value="426670450278535168">李晓林</option><option value="426670450148511744">李研</option><option value="426670450114957312">林则鹏</option><option value="1953717236745121794">刘碧莹</option><option value="426670450052042752">刘超1017</option><option value="426670450299506688">刘凡明</option><option value="1953717543688482817">刘贺</option><option value="426670450215620608">刘红军</option><option value="426670450173677568">刘凯丽</option><option value="426670450085597184">刘旭东</option><option value="426670450060431360">刘卓越</option><option value="426670450127540224">卢敏</option><option value="426670450257563648">卢永强</option><option value="426670450182066176" selected="">路皓</option><option value="426670450081402880">明灏</option><option value="426670450207232000">庞闯0327</option><option value="426670450244980736">乔义龙</option><option value="426670450232397824">邵志远</option><option value="426670450295312384">史初睿</option><option value="426670450265952256">史占磊</option><option value="426670450249175040">疏强</option><option value="426670450161094656">宋晨阳</option><option value="426670450093985792">孙旭</option><option value="426670450169483264">王俊杰</option><option value="1774974064738250753">王茹0824</option><option value="426670450198843392">王腾</option><option value="426670450291118080">王鑫1123</option><option value="426670450098180096">卫云飞</option><option value="426670450068819968">尉博</option><option value="426670450190454784">魏博</option><option value="426670450140123136">吴照振</option><option value="426670450282729472">肖文远</option><option value="1787751532976963585">谢茂磊</option><option value="426670450261757952">徐娜娜</option><option value="426670450219814912">许坤</option><option value="426670450102374400">杨青松</option><option value="426670450123345920">杨帅贤</option><option value="426670450270146560">杨振</option><option value="1776788919849877506">张皓天</option><option value="426670450274340864">张鹏</option><option value="426670450110763008">张伟1117</option><option value="426670450156900352">张炜炜</option><option value="426670450144317440">郑伟0113</option><option value="426670450056237056">周维庆</option><option value="426670450165288960">周伟0424</option><option value="426670450211426304">周艳军</option><option value="426670450177871872">朱勇</option></select><div class="layui-unselect layui-form-select"><div class="layui-select-title"><input type="text" placeholder="请选择" value="路皓" readonly="" class="layui-input layui-unselect"><i class="layui-edge"></i></div><dl class="layui-anim layui-anim-upbit"><dd lay-value="426670450228203520" class="">陈汉林</dd><dd lay-value="426670450224009216" class="">程宝</dd><dd lay-value="426670450194649088" class="">付联霞</dd><dd lay-value="426670450286923776" class="">关欣朋</dd><dd lay-value="426670450119151616" class="">郭子文</dd><dd lay-value="426670450131734528" class="">何文亮</dd><dd lay-value="426670450240786432" class="">黄菊</dd><dd lay-value="426670450253369344" class="">江山</dd><dd lay-value="426670450106568704" class="">靳圣晨</dd><dd lay-value="426670450236592128" class="">鞠强</dd><dd lay-value="426670450064625664" class="">寇祥</dd><dd lay-value="426670450152706048" class="">李滨0927</dd><dd lay-value="426670450186260480" class="">李超群</dd><dd lay-value="426670450203037696" class="">李磊政</dd><dd lay-value="426670450135928832" class="">李路</dd><dd lay-value="426670450089791488" class="">李鹏</dd><dd lay-value="426670450077208576" class="">李群</dd><dd lay-value="1822945599071207425" class="">李涛1107</dd><dd lay-value="426670450073014272" class="">李文品</dd><dd lay-value="426670450278535168" class="">李晓林</dd><dd lay-value="426670450148511744" class="">李研</dd><dd lay-value="426670450114957312" class="">林则鹏</dd><dd lay-value="1953717236745121794" class="">刘碧莹</dd><dd lay-value="426670450052042752" class="">刘超1017</dd><dd lay-value="426670450299506688" class="">刘凡明</dd><dd lay-value="1953717543688482817" class="">刘贺</dd><dd lay-value="426670450215620608" class="">刘红军</dd><dd lay-value="426670450173677568" class="">刘凯丽</dd><dd lay-value="426670450085597184" class="">刘旭东</dd><dd lay-value="426670450060431360" class="">刘卓越</dd><dd lay-value="426670450127540224" class="">卢敏</dd><dd lay-value="426670450257563648" class="">卢永强</dd><dd lay-value="426670450182066176" class="layui-this">路皓</dd><dd lay-value="426670450081402880" class="">明灏</dd><dd lay-value="426670450207232000" class="">庞闯0327</dd><dd lay-value="426670450244980736" class="">乔义龙</dd><dd lay-value="426670450232397824" class="">邵志远</dd><dd lay-value="426670450295312384" class="">史初睿</dd><dd lay-value="426670450265952256" class="">史占磊</dd><dd lay-value="426670450249175040" class="">疏强</dd><dd lay-value="426670450161094656" class="">宋晨阳</dd><dd lay-value="426670450093985792" class="">孙旭</dd><dd lay-value="426670450169483264" class="">王俊杰</dd><dd lay-value="1774974064738250753" class="">王茹0824</dd><dd lay-value="426670450198843392" class="">王腾</dd><dd lay-value="426670450291118080" class="">王鑫1123</dd><dd lay-value="426670450098180096" class="">卫云飞</dd><dd lay-value="426670450068819968" class="">尉博</dd><dd lay-value="426670450190454784" class="">魏博</dd><dd lay-value="426670450140123136" class="">吴照振</dd><dd lay-value="426670450282729472" class="">肖文远</dd><dd lay-value="1787751532976963585" class="">谢茂磊</dd><dd lay-value="426670450261757952" class="">徐娜娜</dd><dd lay-value="426670450219814912" class="">许坤</dd><dd lay-value="426670450102374400" class="">杨青松</dd><dd lay-value="426670450123345920" class="">杨帅贤</dd><dd lay-value="426670450270146560" class="">杨振</dd><dd lay-value="1776788919849877506" class="">张皓天</dd><dd lay-value="426670450274340864" class="">张鹏</dd><dd lay-value="426670450110763008" class="">张伟1117</dd><dd lay-value="426670450156900352" class="">张炜炜</dd><dd lay-value="426670450144317440" class="">郑伟0113</dd><dd lay-value="426670450056237056" class="">周维庆</dd><dd lay-value="426670450165288960" class="">周伟0424</dd><dd lay-value="426670450211426304" class="">周艳军</dd><dd lay-value="426670450177871872" class="">朱勇</dd></dl></div>
+                </div>
+            </div>
+            <div id="submit-button" class="layui-inline">
+                <div class="layui-input-block">
+                    <button id="submit-modify" class="layui-btn layui-btn-normal" lay-submit="" lay-filter="submit-modify">提交需求</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    /*<![CDATA[*/
+    const WEEK_FLAG = 0;
+    /*]]>*/
+</script>
+
+</body><div id="immersive-translate-browser-popup" style="all: initial"></div></html>
