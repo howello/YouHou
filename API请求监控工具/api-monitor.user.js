@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.1
+// @version      2.2
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -45,6 +45,41 @@
 
   // 移除不再需要的全局copyToClipboard函数，已移至monitorWindow对象中
 
+  // 添加控制台日志（需要在拦截器之前定义）
+  function addConsoleLog(type, ...args) {
+    const timestamp = new Date().toLocaleTimeString();
+    const content = args
+      .map((arg) => {
+        if (arg === null) return "null";
+        if (arg === undefined) return "undefined";
+        // 处理 Error 对象，包括堆栈信息
+        if (arg instanceof Error) {
+          return `${arg.name}: ${arg.message}${arg.stack ? '\n' + arg.stack : ''}`;
+        }
+        if (typeof arg === "object") {
+          try {
+            return JSON.stringify(arg, null, 2);
+          } catch {
+            return String(arg);
+          }
+        }
+        return String(arg);
+      })
+      .join(" ");
+
+    consoleLogs.push({ type, timestamp, content });
+
+    // 限制日志数量
+    if (consoleLogs.length > 500) {
+      // 使用splice修改现有数组而不是重新赋值
+      const newLogs = consoleLogs.slice(-500);
+      consoleLogs.splice(0, consoleLogs.length, ...newLogs);
+    }
+
+    // 更新显示
+    updateConsoleLogs();
+  }
+
   // 立即拦截控制台方法，确保从页面加载开始就能捕获所有日志
   (function interceptConsoleMethods() {
     console.log = function (...args) {
@@ -80,23 +115,38 @@
   // 用于存储监控状态提示图标
   let statusIcon = null;
 
+  // 更新状态图标视觉效果
+  function updateStatusIconVisuals() {
+    if (!statusIcon) return;
+    
+    if (isMonitoring) {
+      statusIcon.style.backgroundColor = "#35dd29c1";
+      statusIcon.style.animation = "breathe 2s infinite ease-in-out";
+      statusIcon.title = "API监控已启用 - 点击查看监控页面";
+    } else {
+      statusIcon.style.backgroundColor = "#f44336";
+      statusIcon.style.animation = "none";
+      statusIcon.title = "API监控未启用 - 点击启用";
+    }
+  }
+
   // 创建状态提示图标
   function createStatusIcon() {
-    // 如果图标已存在，先移除
+    // 如果图标已存在，直接更新状态
     if (statusIcon) {
-      statusIcon.remove();
+      updateStatusIconVisuals();
+      return;
     }
 
     // 创建图标元素
     statusIcon = document.createElement("div");
     statusIcon.id = "api-monitor-status-icon";
     statusIcon.style.position = "fixed";
-    statusIcon.style.top = "20px";
+    statusIcon.style.top = "100px";
     statusIcon.style.right = "20px";
     statusIcon.style.width = "40px";
     statusIcon.style.height = "40px";
     statusIcon.style.borderRadius = "50%";
-    statusIcon.style.backgroundColor = "#16b1fec1";
     statusIcon.style.color = "white";
     statusIcon.style.display = "flex";
     statusIcon.style.justifyContent = "center";
@@ -104,11 +154,9 @@
     statusIcon.style.cursor = "move";
     statusIcon.style.zIndex = "999999";
     statusIcon.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
+    statusIcon.style.fontSize = "16px";
     statusIcon.style.transition =
       "background-color 0.3s ease, transform 0.3s ease";
-
-    // 添加呼吸动画效果
-    statusIcon.style.animation = "breathe 2s infinite ease-in-out";
 
     // 创建动画样式
     const styleSheet = document.createElement("style");
@@ -138,16 +186,19 @@
     // 保存动画样式引用
     statusIcon._animationStyleSheet = styleSheet;
     statusIcon.innerHTML = "📡";
-    statusIcon.title = "API监控已启用 - 点击查看监控页面";
-
-    // 添加点击事件 - 切换到监控页面
+    
+    // 添加点击事件
     statusIcon.addEventListener("click", function () {
-      if (monitorWindow && !monitorWindow.closed) {
-        // 如果窗口已存在且未关闭，聚焦到窗口
-        monitorWindow.focus();
+      if (!isMonitoring) {
+        toggleMonitoring();
       } else {
-        // 否则创建新的监控窗口
-        createMonitorWindow();
+        if (monitorWindow && !monitorWindow.closed) {
+          // 如果窗口已存在且未关闭，聚焦到窗口
+          monitorWindow.focus();
+        } else {
+          // 否则创建新的监控窗口
+          createMonitorWindow();
+        }
       }
     });
 
@@ -161,7 +212,6 @@
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
       statusIcon.style.cursor = "grabbing";
-      statusIcon.style.backgroundColor = "#16b1fec1";
       // 暂停呼吸动画
       statusIcon.setAttribute("data-dragging", "true");
     });
@@ -180,7 +230,6 @@
       if (isDragging) {
         isDragging = false;
         statusIcon.style.cursor = "move";
-        statusIcon.style.backgroundColor = "#16b1fec1";
         // 恢复呼吸动画
         statusIcon.removeAttribute("data-dragging");
       }
@@ -193,21 +242,9 @@
 
     // 将图标添加到页面
     document.body.appendChild(statusIcon);
-  }
-
-  // 移除状态提示图标
-  function removeStatusIcon() {
-    if (statusIcon) {
-      // 移除动画样式
-      if (
-        statusIcon._animationStyleSheet &&
-        document.head.contains(statusIcon._animationStyleSheet)
-      ) {
-        document.head.removeChild(statusIcon._animationStyleSheet);
-      }
-      statusIcon.remove();
-      statusIcon = null;
-    }
+    
+    // 设置初始状态
+    updateStatusIconVisuals();
   }
 
   // 在新窗口中创建监控UI
@@ -351,6 +388,42 @@
             margin-top: 15px;
             margin-bottom: 8px;
           }
+          #back-to-top-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 1000;
+            transition: opacity 0.3s;
+          }
+          #back-to-top-btn:hover {
+            background-color: #1976D2;
+          }
+          .base64-download-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: 1px solid #45a049;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+            display: inline-block;
+          }
+          .base64-download-btn:hover {
+            background-color: #45a049;
+          }
         </style>
       </head>
       <body>
@@ -370,8 +443,9 @@
         </div>
         <div style="display: flex; height: calc(100vh - 140px); width: 100%;">
           <div id="api-request-list" style="width: 50%; height: 100%; flex: 1; border-right: 1px solid #ccc; overflow-y: auto;"></div>
-          <div id="api-detail-panel" style="width: 50%; height: 100%; flex: 1; overflow-y: auto; display: none;">
+          <div id="api-detail-panel" style="width: 50%; height: 100%; flex: 1; overflow-y: auto; display: none; position: relative;">
             <button id="close-detail-button" style="background-color: #f44336; color: white;">关闭详情</button>
+            <button id="back-to-top-btn" title="回到顶部">↑</button>
           </div>
         </div>
         <div id="console-panel" style="height: calc(100vh - 150px); overflow-y: auto;"></div>
@@ -558,6 +632,27 @@
         // 隐藏详情面板
         detailPanel.style.display = "none";
       });
+
+    // 回到顶部按钮功能
+    const detailPanel = monitorWindow.document.getElementById("api-detail-panel");
+    const backToTopBtn = monitorWindow.document.getElementById("back-to-top-btn");
+    
+    if (detailPanel && backToTopBtn) {
+      detailPanel.addEventListener("scroll", () => {
+        if (detailPanel.scrollTop > 300) {
+          backToTopBtn.style.display = "flex";
+        } else {
+          backToTopBtn.style.display = "none";
+        }
+      });
+
+      backToTopBtn.addEventListener("click", () => {
+        detailPanel.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      });
+    }
 
     // 监听窗口关闭事件
     monitorWindow.addEventListener("beforeunload", () => {
@@ -1345,37 +1440,6 @@
     consolePanel.scrollTop = consolePanel.scrollHeight;
   }
 
-  // 添加控制台日志
-  function addConsoleLog(type, ...args) {
-    const timestamp = new Date().toLocaleTimeString();
-    const content = args
-      .map((arg) => {
-        if (arg === null) return "null";
-        if (arg === undefined) return "undefined";
-        if (typeof arg === "object") {
-          try {
-            return JSON.stringify(arg, null, 2);
-          } catch {
-            return String(arg);
-          }
-        }
-        return String(arg);
-      })
-      .join(" ");
-
-    consoleLogs.push({ type, timestamp, content });
-
-    // 限制日志数量
-    if (consoleLogs.length > 500) {
-      // 使用splice修改现有数组而不是重新赋值
-      const newLogs = consoleLogs.slice(-500);
-      consoleLogs.splice(0, consoleLogs.length, ...newLogs);
-    }
-
-    // 更新显示
-    updateConsoleLogs();
-  }
-
   // 获取当前域名的唯一标识
   function getDomainKey() {
     try {
@@ -1444,11 +1508,19 @@
       isMonitoring = true;
       GM_setValue(`apiMonitorEnabled_${domainKey}`, true);
       console.log(`开始监控${domainKey}的API请求`);
-      // 创建监控窗口
+      // 创建监控窗口，但尝试在后台打开
       createMonitorWindow();
+      if (monitorWindow) {
+        try {
+          monitorWindow.blur();
+          window.focus();
+        } catch (e) {
+          console.log("无法在后台打开窗口");
+        }
+      }
       startMonitoring();
-      // 创建状态提示图标
-      createStatusIcon();
+      // 更新状态提示图标
+      updateStatusIconVisuals();
     } else {
       // 停止监控
       isMonitoring = false;
@@ -1460,8 +1532,8 @@
         monitorWindow = null;
       }
       stopMonitoring();
-      // 移除状态提示图标
-      removeStatusIcon();
+      // 更新状态提示图标
+      updateStatusIconVisuals();
     }
   }
 
@@ -1835,6 +1907,185 @@
     return displayUrl;
   }
 
+  // 检测 base64 字符串并创建下载按钮
+  function detectBase64AndCreateDownload(data, monitorWindow) {
+    if (!data || typeof data !== 'object') return null;
+    
+    const base64Fields = [];
+    
+    // 解析 Data URL 格式
+    function parseDataUrl(dataUrl) {
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        return {
+          mimeType: match[1],
+          base64Data: match[2]
+        };
+      }
+      return null;
+    }
+    
+    // 根据 MIME 类型获取文件扩展名
+    function getFileExtension(mimeType) {
+      const mimeMap = {
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+        'application/pdf': 'pdf',
+        'application/zip': 'zip',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.ms-excel': 'xls',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/msword': 'doc',
+        'text/plain': 'txt',
+        'application/json': 'json'
+      };
+      return mimeMap[mimeType] || 'bin';
+    }
+    
+    // 递归查找 base64 字符串
+    function findBase64(obj, path = '') {
+      if (typeof obj === 'string') {
+        let base64Data = null;
+        let mimeType = 'application/octet-stream';
+        let fileType = 'bin';
+        
+        // 检测 Data URL 格式
+        if (obj.startsWith('data:')) {
+          const parsed = parseDataUrl(obj);
+          if (parsed) {
+            base64Data = parsed.base64Data;
+            mimeType = parsed.mimeType;
+            fileType = getFileExtension(mimeType);
+          }
+        } 
+        // 检测纯 base64 字符串
+        else {
+          const base64Regex = /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
+          if (obj.length > 100 && base64Regex.test(obj)) {
+            base64Data = obj;
+            
+            // 检测文件类型（通过 base64 头部）
+            try {
+              const header = obj.substring(0, 50);
+              if (header.startsWith('iVBORw0KGgo')) {
+                fileType = 'png';
+                mimeType = 'image/png';
+              } else if (header.startsWith('/9j/')) {
+                fileType = 'jpg';
+                mimeType = 'image/jpeg';
+              } else if (header.startsWith('R0lGOD')) {
+                fileType = 'gif';
+                mimeType = 'image/gif';
+              } else if (header.startsWith('UEs')) {
+                fileType = 'zip';
+                mimeType = 'application/zip';
+              } else if (header.startsWith('JVBERi0')) {
+                fileType = 'pdf';
+                mimeType = 'application/pdf';
+              }
+            } catch (e) {
+              console.error('检测文件类型失败:', e);
+            }
+          }
+        }
+        
+        if (base64Data) {
+          base64Fields.push({
+            path: path || 'root',
+            data: base64Data,
+            fileType: fileType,
+            mimeType: mimeType,
+            size: Math.round(base64Data.length * 0.75) // base64 解码后的大致大小
+          });
+        }
+      } else if (typeof obj === 'object' && obj !== null) {
+        for (const key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            const newPath = path ? `${path}.${key}` : key;
+            findBase64(obj[key], newPath);
+          }
+        }
+      }
+    }
+    
+    findBase64(data);
+    
+    if (base64Fields.length === 0) return null;
+    
+    // 创建下载按钮容器
+    const container = monitorWindow.document.createElement('div');
+    container.style.marginTop = '10px';
+    container.style.padding = '10px';
+    container.style.backgroundColor = '#f0f8ff';
+    container.style.borderRadius = '4px';
+    container.style.border = '1px solid #b0d4ff';
+    
+    const title = monitorWindow.document.createElement('div');
+    title.innerHTML = `<strong>检测到 ${base64Fields.length} 个 Base64 文件:</strong>`;
+    title.style.marginBottom = '8px';
+    container.appendChild(title);
+    
+    base64Fields.forEach((field, index) => {
+      const btn = monitorWindow.document.createElement('button');
+      btn.className = 'base64-download-btn';
+      
+      // 判断是否可预览
+      const isPreviewable = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'].includes(field.fileType.toLowerCase());
+      const buttonText = isPreviewable 
+        ? `打开 ${field.path} (${field.fileType.toUpperCase()}, ~${(field.size / 1024).toFixed(1)}KB)` 
+        : `下载 ${field.path} (${field.fileType.toUpperCase()}, ~${(field.size / 1024).toFixed(1)}KB)`;
+      
+      btn.textContent = buttonText;
+      btn.onclick = function() {
+        try {
+          // 解码 base64
+          const binaryString = atob(field.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // 创建 Blob
+          const blob = new Blob([bytes], { type: field.mimeType });
+          const url = URL.createObjectURL(blob);
+          
+          if (isPreviewable) {
+            // 在新标签页中打开
+            const newWindow = window.open(url, '_blank');
+            if (newWindow) {
+              monitorWindow.window.showMessage(`文件已在新标签页中打开`, 'success');
+              // 延迟释放 URL，给浏览器足够时间加载
+              setTimeout(() => URL.revokeObjectURL(url), 5000);
+            } else {
+              monitorWindow.window.showMessage(`无法打开新标签页，请检查浏览器弹窗设置`, 'warning');
+              URL.revokeObjectURL(url);
+            }
+          } else {
+            // 下载文件
+            const a = monitorWindow.document.createElement('a');
+            a.href = url;
+            a.download = `${field.path.replace(/\./g, '_')}_${Date.now()}.${field.fileType}`;
+            a.click();
+            
+            // 释放 URL
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+            
+            monitorWindow.window.showMessage(`文件下载成功: ${a.download}`, 'success');
+          }
+        } catch (e) {
+          console.error('操作失败:', e);
+          monitorWindow.window.showMessage(`操作失败: ${e.message}`, 'error');
+        }
+      };
+      container.appendChild(btn);
+    });
+    
+    return container;
+  }
+
   // 显示请求详情
   function showRequestDetails(request) {
     // 检查监控窗口是否存在且未关闭
@@ -1887,11 +2138,53 @@
             <pre>${formatObject(request.headers)}</pre>
         `;
 
-    // 请求体
+    // 请求体（处理 base64 替换）
     const requestBodySection = monitorWindow.document.createElement("div");
+    let requestBodyContent = formatRequestBody(request.requestBody);
+    
+    // 尝试替换 base64 为文件占位符
+    let requestData = request.requestBody;
+    if (typeof requestData === 'string') {
+      try {
+        requestData = JSON.parse(requestData);
+      } catch (e) {
+        // 如果不是 JSON，就保持原样
+      }
+    }
+    
+    // 存储 base64 字段信息用于创建下载按钮
+    const base64FieldsInfo = [];
+    
+    if (requestData && typeof requestData === 'object') {
+      // 递归替换 base64 字符串
+      function replaceBase64InObject(obj) {
+        if (typeof obj === 'string') {
+          // 检测 Data URL 或长 base64
+          if (obj.startsWith('data:') || (obj.length > 100 && /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(obj))) {
+            return '[Base64 文件]';
+          }
+          return obj;
+        } else if (Array.isArray(obj)) {
+          return obj.map(item => replaceBase64InObject(item));
+        } else if (typeof obj === 'object' && obj !== null) {
+          const newObj = {};
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              newObj[key] = replaceBase64InObject(obj[key]);
+            }
+          }
+          return newObj;
+        }
+        return obj;
+      }
+      
+      const replacedData = replaceBase64InObject(requestData);
+      requestBodyContent = JSON.stringify(replacedData, null, 2);
+    }
+    
     requestBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${formatRequestBody(request.requestBody)}</pre>
+            <pre>${requestBodyContent}</pre>
         `;
 
     // 响应头
@@ -1913,15 +2206,38 @@
         `;
 
     // 清空详情面板并添加新内容
-    // 保留关闭按钮
+    // 保留关闭按钮和回到顶部按钮
     const closeButton = detailPanel.querySelector("#close-detail-button");
+    const backToTopBtn = detailPanel.querySelector("#back-to-top-btn");
     detailPanel.innerHTML = "";
     detailPanel.appendChild(closeButton);
+    if (backToTopBtn) {
+      detailPanel.appendChild(backToTopBtn);
+    }
 
     // 添加到详情面板
     detailPanel.appendChild(basicInfo);
     detailPanel.appendChild(requestHeadersSection);
     detailPanel.appendChild(requestBodySection);
+    
+    // 检测并添加 base64 下载按钮
+    try {
+      let requestData = request.requestBody;
+      if (typeof requestData === 'string') {
+        try {
+          requestData = JSON.parse(requestData);
+        } catch (e) {
+          // 如果不是 JSON，就保持原样
+        }
+      }
+      const base64Downloads = detectBase64AndCreateDownload(requestData, monitorWindow);
+      if (base64Downloads) {
+        detailPanel.appendChild(base64Downloads);
+      }
+    } catch (e) {
+      console.error('检测 base64 失败:', e);
+    }
+    
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
 
@@ -1990,6 +2306,7 @@
   // 清空历史记录
   function clearHistory() {
     requestHistory = [];
+    consoleLogs = []; // 清空控制台日志
 
     // 清除保存的历史记录
     try {
@@ -1999,6 +2316,7 @@
     }
 
     updateRequestList();
+    updateConsoleLogs(); // 更新控制台日志显示
 
     // 如果详情面板显示，则隐藏它
     if (monitorWindow && !monitorWindow.closed) {
@@ -2042,14 +2360,15 @@
     // 初始化菜单
     initializeMenu();
 
+    // 始终创建状态图标
+    createStatusIcon();
+
     // 如果之前保存的状态是开启的，恢复监控
     if (isMonitoring) {
       console.log("根据保存的状态恢复监控");
       createMonitorWindow();
       // startMonitoring函数已经包含了console方法的拦截，无需重复添加
       startMonitoring();
-      // 创建状态提示图标
-      createStatusIcon();
     }
   }
 
