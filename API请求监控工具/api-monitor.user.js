@@ -424,6 +424,51 @@
           .base64-download-btn:hover {
             background-color: #45a049;
           }
+          .file-preview-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+          }
+          .file-preview-content {
+            position: relative;
+            margin: auto;
+            padding: 0;
+            width: 90%;
+            max-width: 1200px;
+            height: 90%;
+            margin-top: 2%;
+          }
+          .file-preview-close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10001;
+          }
+          .file-preview-close:hover,
+          .file-preview-close:focus {
+            color: #bbb;
+          }
+          .file-preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+          }
+          .file-preview-img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+            margin: auto;
+          }
         </style>
       </head>
       <body>
@@ -2053,16 +2098,11 @@
           const url = URL.createObjectURL(blob);
           
           if (isPreviewable) {
-            // 在新标签页中打开
-            const newWindow = window.open(url, '_blank');
-            if (newWindow) {
-              monitorWindow.window.showMessage(`文件已在新标签页中打开`, 'success');
-              // 延迟释放 URL，给浏览器足够时间加载
-              setTimeout(() => URL.revokeObjectURL(url), 5000);
-            } else {
-              monitorWindow.window.showMessage(`无法打开新标签页，请检查浏览器弹窗设置`, 'warning');
-              URL.revokeObjectURL(url);
-            }
+            // 在弹窗中预览
+            showFilePreviewModal(url, field.fileType, monitorWindow);
+            monitorWindow.window.showMessage(`文件预览已打开`, 'success');
+            // 延迟释放 URL，给浏览器足够时间加载
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
           } else {
             // 下载文件
             const a = monitorWindow.document.createElement('a');
@@ -2084,6 +2124,74 @@
     });
     
     return container;
+  }
+
+  // 显示文件预览模态框
+  function showFilePreviewModal(url, fileType, monitorWindow) {
+    // 创建模态框
+    let modal = monitorWindow.document.getElementById('file-preview-modal');
+    if (!modal) {
+      modal = monitorWindow.document.createElement('div');
+      modal.id = 'file-preview-modal';
+      modal.className = 'file-preview-modal';
+      
+      const content = monitorWindow.document.createElement('div');
+      content.className = 'file-preview-content';
+      
+      const closeBtn = monitorWindow.document.createElement('span');
+      closeBtn.className = 'file-preview-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.onclick = function() {
+        modal.style.display = 'none';
+        // 清空内容
+        const container = modal.querySelector('.file-preview-container');
+        if (container) {
+          container.innerHTML = '';
+        }
+      };
+      
+      const container = monitorWindow.document.createElement('div');
+      container.className = 'file-preview-container';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      
+      content.appendChild(closeBtn);
+      content.appendChild(container);
+      modal.appendChild(content);
+      monitorWindow.document.body.appendChild(modal);
+      
+      // 点击模态框外部关闭
+      modal.onclick = function(event) {
+        if (event.target === modal) {
+          modal.style.display = 'none';
+          const container = modal.querySelector('.file-preview-container');
+          if (container) {
+            container.innerHTML = '';
+          }
+        }
+      };
+    }
+    
+    // 清空之前的内容
+    const container = modal.querySelector('.file-preview-container');
+    container.innerHTML = '';
+    
+    // 根据文件类型创建预览元素
+    if (fileType === 'pdf') {
+      const iframe = monitorWindow.document.createElement('iframe');
+      iframe.className = 'file-preview-iframe';
+      iframe.src = url;
+      container.appendChild(iframe);
+    } else {
+      // 图片
+      const img = monitorWindow.document.createElement('img');
+      img.className = 'file-preview-img';
+      img.src = url;
+      container.appendChild(img);
+    }
+    
+    // 显示模态框
+    modal.style.display = 'block';
   }
 
   // 显示请求详情
@@ -2198,11 +2306,50 @@
             }</pre>
         `;
 
-    // 响应体
+    // 响应体（处理 base64 替换）
     const responseBodySection = monitorWindow.document.createElement("div");
+    let responseBodyContent = formatResponseBody(request.responseBody);
+    
+    // 尝试替换响应体中的 base64 为文件占位符
+    let responseData = request.responseBody;
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+      } catch (e) {
+        // 如果不是 JSON，就保持原样
+      }
+    }
+    
+    if (responseData && typeof responseData === 'object') {
+      // 递归替换 base64 字符串（复用请求体的函数）
+      function replaceBase64InObject(obj) {
+        if (typeof obj === 'string') {
+          // 检测 Data URL 或长 base64
+          if (obj.startsWith('data:') || (obj.length > 100 && /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(obj))) {
+            return '[Base64 文件]';
+          }
+          return obj;
+        } else if (Array.isArray(obj)) {
+          return obj.map(item => replaceBase64InObject(item));
+        } else if (typeof obj === 'object' && obj !== null) {
+          const newObj = {};
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              newObj[key] = replaceBase64InObject(obj[key]);
+            }
+          }
+          return newObj;
+        }
+        return obj;
+      }
+      
+      const replacedData = replaceBase64InObject(responseData);
+      responseBodyContent = JSON.stringify(replacedData, null, 2);
+    }
+    
     responseBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${formatResponseBody(request.responseBody)}</pre>
+            <pre>${responseBodyContent}</pre>
         `;
 
     // 清空详情面板并添加新内容
@@ -2240,6 +2387,24 @@
     
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
+    
+    // 检测并添加响应体的 base64 下载按钮
+    try {
+      let responseData = request.responseBody;
+      if (typeof responseData === 'string') {
+        try {
+          responseData = JSON.parse(responseData);
+        } catch (e) {
+          // 如果不是 JSON，就保持原样
+        }
+      }
+      const responseBase64Downloads = detectBase64AndCreateDownload(responseData, monitorWindow);
+      if (responseBase64Downloads) {
+        detailPanel.appendChild(responseBase64Downloads);
+      }
+    } catch (e) {
+      console.error('检测响应体 base64 失败:', e);
+    }
 
     // 滚动到顶部
     detailPanel.scrollTop = 0;
