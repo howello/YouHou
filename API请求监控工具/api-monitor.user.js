@@ -18,7 +18,7 @@
 // ==/UserScript==
 
 (function () {
-  "use strict";
+  ("use strict");
 
   // API请求历史记录
   let requestHistory = [];
@@ -54,11 +54,13 @@
         if (arg === undefined) return "undefined";
         // 处理 Error 对象，包括堆栈信息
         if (arg instanceof Error) {
-          return `${arg.name}: ${arg.message}${arg.stack ? '\n' + arg.stack : ''}`;
+          return `${arg.name}: ${arg.message}${
+            arg.stack ? "\n" + arg.stack : ""
+          }`;
         }
         if (typeof arg === "object") {
           try {
-            return JSON.stringify(arg, null, 2);
+            return sortedJSONStringify(arg, null, 2);
           } catch {
             return String(arg);
           }
@@ -118,7 +120,7 @@
   // 更新状态图标视觉效果
   function updateStatusIconVisuals() {
     if (!statusIcon) return;
-    
+
     if (isMonitoring) {
       statusIcon.style.backgroundColor = "#35dd29c1";
       statusIcon.style.animation = "breathe 2s infinite ease-in-out";
@@ -186,7 +188,7 @@
     // 保存动画样式引用
     statusIcon._animationStyleSheet = styleSheet;
     statusIcon.innerHTML = "📡";
-    
+
     // 添加点击事件
     statusIcon.addEventListener("click", function () {
       if (!isMonitoring) {
@@ -242,7 +244,7 @@
 
     // 将图标添加到页面
     document.body.appendChild(statusIcon);
-    
+
     // 设置初始状态
     updateStatusIconVisuals();
   }
@@ -679,9 +681,11 @@
       });
 
     // 回到顶部按钮功能
-    const detailPanel = monitorWindow.document.getElementById("api-detail-panel");
-    const backToTopBtn = monitorWindow.document.getElementById("back-to-top-btn");
-    
+    const detailPanel =
+      monitorWindow.document.getElementById("api-detail-panel");
+    const backToTopBtn =
+      monitorWindow.document.getElementById("back-to-top-btn");
+
     if (detailPanel && backToTopBtn) {
       detailPanel.addEventListener("scroll", () => {
         if (detailPanel.scrollTop > 300) {
@@ -694,7 +698,7 @@
       backToTopBtn.addEventListener("click", () => {
         detailPanel.scrollTo({
           top: 0,
-          behavior: "smooth"
+          behavior: "smooth",
         });
       });
     }
@@ -842,7 +846,7 @@
         // 获取完整值文本
         const fullValueText =
           typeof value === "object"
-            ? JSON.stringify(value, null, 2)
+            ? sortedJSONStringify(value, null, 2)
             : String(value);
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
@@ -1063,7 +1067,7 @@
         // 获取完整值文本
         const fullValueText =
           typeof value === "object"
-            ? JSON.stringify(value, null, 2)
+            ? sortedJSONStringify(value, null, 2)
             : String(value);
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
@@ -1295,7 +1299,7 @@
         // 获取完整值文本
         const fullValueText =
           typeof value === "object"
-            ? JSON.stringify(value, null, 2)
+            ? sortedJSONStringify(value, null, 2)
             : String(value);
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
@@ -1815,7 +1819,7 @@
 
       // 保存历史记录到GM_setValue
       try {
-        GM_setValue("apiRequestHistory", JSON.stringify(requestHistory));
+        GM_setValue("apiRequestHistory", sortedJSONStringify(requestHistory));
       } catch (e) {
         console.error("保存请求历史失败:", e);
       }
@@ -1954,99 +1958,102 @@
 
   // 检测 base64 字符串并创建下载按钮
   function detectBase64AndCreateDownload(data, monitorWindow) {
-    if (!data || typeof data !== 'object') return null;
-    
+    if (!data || typeof data !== "object") return null;
+
     const base64Fields = [];
-    
+
     // 解析 Data URL 格式
     function parseDataUrl(dataUrl) {
       const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
         return {
           mimeType: match[1],
-          base64Data: match[2]
+          base64Data: match[2],
         };
       }
       return null;
     }
-    
+
     // 根据 MIME 类型获取文件扩展名
     function getFileExtension(mimeType) {
       const mimeMap = {
-        'image/png': 'png',
-        'image/jpeg': 'jpg',
-        'image/jpg': 'jpg',
-        'image/gif': 'gif',
-        'image/webp': 'webp',
-        'application/pdf': 'pdf',
-        'application/zip': 'zip',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-        'application/vnd.ms-excel': 'xls',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-        'application/msword': 'doc',
-        'text/plain': 'txt',
-        'application/json': 'json'
+        "image/png": "png",
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "application/pdf": "pdf",
+        "application/zip": "zip",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+          "xlsx",
+        "application/vnd.ms-excel": "xls",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+          "docx",
+        "application/msword": "doc",
+        "text/plain": "txt",
+        "application/json": "json",
       };
-      return mimeMap[mimeType] || 'bin';
+      return mimeMap[mimeType] || "bin";
     }
-    
+
     // 递归查找 base64 字符串
-    function findBase64(obj, path = '') {
-      if (typeof obj === 'string') {
+    function findBase64(obj, path = "") {
+      if (typeof obj === "string") {
         let base64Data = null;
-        let mimeType = 'application/octet-stream';
-        let fileType = 'bin';
-        
+        let mimeType = "application/octet-stream";
+        let fileType = "bin";
+
         // 检测 Data URL 格式
-        if (obj.startsWith('data:')) {
+        if (obj.startsWith("data:")) {
           const parsed = parseDataUrl(obj);
           if (parsed) {
             base64Data = parsed.base64Data;
             mimeType = parsed.mimeType;
             fileType = getFileExtension(mimeType);
           }
-        } 
+        }
         // 检测纯 base64 字符串
         else {
-          const base64Regex = /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
+          const base64Regex =
+            /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
           if (obj.length > 100 && base64Regex.test(obj)) {
             base64Data = obj;
-            
+
             // 检测文件类型（通过 base64 头部）
             try {
               const header = obj.substring(0, 50);
-              if (header.startsWith('iVBORw0KGgo')) {
-                fileType = 'png';
-                mimeType = 'image/png';
-              } else if (header.startsWith('/9j/')) {
-                fileType = 'jpg';
-                mimeType = 'image/jpeg';
-              } else if (header.startsWith('R0lGOD')) {
-                fileType = 'gif';
-                mimeType = 'image/gif';
-              } else if (header.startsWith('UEs')) {
-                fileType = 'zip';
-                mimeType = 'application/zip';
-              } else if (header.startsWith('JVBERi0')) {
-                fileType = 'pdf';
-                mimeType = 'application/pdf';
+              if (header.startsWith("iVBORw0KGgo")) {
+                fileType = "png";
+                mimeType = "image/png";
+              } else if (header.startsWith("/9j/")) {
+                fileType = "jpg";
+                mimeType = "image/jpeg";
+              } else if (header.startsWith("R0lGOD")) {
+                fileType = "gif";
+                mimeType = "image/gif";
+              } else if (header.startsWith("UEs")) {
+                fileType = "zip";
+                mimeType = "application/zip";
+              } else if (header.startsWith("JVBERi0")) {
+                fileType = "pdf";
+                mimeType = "application/pdf";
               }
             } catch (e) {
-              console.error('检测文件类型失败:', e);
+              console.error("检测文件类型失败:", e);
             }
           }
         }
-        
+
         if (base64Data) {
           base64Fields.push({
-            path: path || 'root',
+            path: path || "root",
             data: base64Data,
             fileType: fileType,
             mimeType: mimeType,
-            size: Math.round(base64Data.length * 0.75) // base64 解码后的大致大小
+            size: Math.round(base64Data.length * 0.75), // base64 解码后的大致大小
           });
         }
-      } else if (typeof obj === 'object' && obj !== null) {
+      } else if (typeof obj === "object" && obj !== null) {
         for (const key in obj) {
           if (obj.hasOwnProperty(key)) {
             const newPath = path ? `${path}.${key}` : key;
@@ -2055,36 +2062,47 @@
         }
       }
     }
-    
+
     findBase64(data);
-    
+
     if (base64Fields.length === 0) return null;
-    
+
     // 创建下载按钮容器
-    const container = monitorWindow.document.createElement('div');
-    container.style.marginTop = '10px';
-    container.style.padding = '10px';
-    container.style.backgroundColor = '#f0f8ff';
-    container.style.borderRadius = '4px';
-    container.style.border = '1px solid #b0d4ff';
-    
-    const title = monitorWindow.document.createElement('div');
+    const container = monitorWindow.document.createElement("div");
+    container.style.marginTop = "10px";
+    container.style.padding = "10px";
+    container.style.backgroundColor = "#f0f8ff";
+    container.style.borderRadius = "4px";
+    container.style.border = "1px solid #b0d4ff";
+
+    const title = monitorWindow.document.createElement("div");
     title.innerHTML = `<strong>检测到 ${base64Fields.length} 个 Base64 文件:</strong>`;
-    title.style.marginBottom = '8px';
+    title.style.marginBottom = "8px";
     container.appendChild(title);
-    
+
     base64Fields.forEach((field, index) => {
-      const btn = monitorWindow.document.createElement('button');
-      btn.className = 'base64-download-btn';
-      
+      const btn = monitorWindow.document.createElement("button");
+      btn.className = "base64-download-btn";
+
       // 判断是否可预览
-      const isPreviewable = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'].includes(field.fileType.toLowerCase());
-      const buttonText = isPreviewable 
-        ? `打开 ${field.path} (${field.fileType.toUpperCase()}, ~${(field.size / 1024).toFixed(1)}KB)` 
-        : `下载 ${field.path} (${field.fileType.toUpperCase()}, ~${(field.size / 1024).toFixed(1)}KB)`;
-      
+      const isPreviewable = [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "pdf",
+      ].includes(field.fileType.toLowerCase());
+      const buttonText = isPreviewable
+        ? `打开 ${field.path} (${field.fileType.toUpperCase()}, ~${(
+            field.size / 1024
+          ).toFixed(1)}KB)`
+        : `下载 ${field.path} (${field.fileType.toUpperCase()}, ~${(
+            field.size / 1024
+          ).toFixed(1)}KB)`;
+
       btn.textContent = buttonText;
-      btn.onclick = function() {
+      btn.onclick = function () {
         try {
           // 解码 base64
           const binaryString = atob(field.data);
@@ -2092,106 +2110,111 @@
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          
+
           // 创建 Blob
           const blob = new Blob([bytes], { type: field.mimeType });
           const url = URL.createObjectURL(blob);
-          
+
           if (isPreviewable) {
             // 在弹窗中预览
             showFilePreviewModal(url, field.fileType, monitorWindow);
-            monitorWindow.window.showMessage(`文件预览已打开`, 'success');
+            monitorWindow.window.showMessage(`文件预览已打开`, "success");
             // 延迟释放 URL，给浏览器足够时间加载
             setTimeout(() => URL.revokeObjectURL(url), 10000);
           } else {
             // 下载文件
-            const a = monitorWindow.document.createElement('a');
+            const a = monitorWindow.document.createElement("a");
             a.href = url;
-            a.download = `${field.path.replace(/\./g, '_')}_${Date.now()}.${field.fileType}`;
+            a.download = `${field.path.replace(/\./g, "_")}_${Date.now()}.${
+              field.fileType
+            }`;
             a.click();
-            
+
             // 释放 URL
             setTimeout(() => URL.revokeObjectURL(url), 100);
-            
-            monitorWindow.window.showMessage(`文件下载成功: ${a.download}`, 'success');
+
+            monitorWindow.window.showMessage(
+              `文件下载成功: ${a.download}`,
+              "success"
+            );
           }
         } catch (e) {
-          console.error('操作失败:', e);
-          monitorWindow.window.showMessage(`操作失败: ${e.message}`, 'error');
+          console.error("操作失败:", e);
+          monitorWindow.window.showMessage(`操作失败: ${e.message}`, "error");
         }
       };
       container.appendChild(btn);
     });
-    
+
     return container;
   }
 
   // 显示文件预览模态框
   function showFilePreviewModal(url, fileType, monitorWindow) {
     // 创建模态框
-    let modal = monitorWindow.document.getElementById('file-preview-modal');
+    let modal = monitorWindow.document.getElementById("file-preview-modal");
     if (!modal) {
-      modal = monitorWindow.document.createElement('div');
-      modal.id = 'file-preview-modal';
-      modal.className = 'file-preview-modal';
-      
-      const content = monitorWindow.document.createElement('div');
-      content.className = 'file-preview-content';
-      
-      const closeBtn = monitorWindow.document.createElement('span');
-      closeBtn.className = 'file-preview-close';
-      closeBtn.innerHTML = '&times;';
-      closeBtn.onclick = function() {
-        modal.style.display = 'none';
+      modal = monitorWindow.document.createElement("div");
+      modal.id = "file-preview-modal";
+      modal.className = "file-preview-modal";
+
+      const content = monitorWindow.document.createElement("div");
+      content.className = "file-preview-content";
+
+      const closeBtn = monitorWindow.document.createElement("span");
+      closeBtn.className = "file-preview-close";
+      closeBtn.innerHTML = "&times;";
+      closeBtn.onclick = function () {
+        modal.style.display = "none";
         // 清空内容
-        const container = modal.querySelector('.file-preview-container');
+        const container = modal.querySelector(".file-preview-container");
         if (container) {
-          container.innerHTML = '';
+          container.innerHTML = "";
         }
       };
-      
-      const container = monitorWindow.document.createElement('div');
-      container.className = 'file-preview-container';
-      container.style.width = '100%';
-      container.style.height = '100%';
-      
+
+      const container = monitorWindow.document.createElement("div");
+      container.className = "file-preview-container";
+      container.style.width = "100%";
+      container.style.height = "100%";
+
       content.appendChild(closeBtn);
       content.appendChild(container);
       modal.appendChild(content);
       monitorWindow.document.body.appendChild(modal);
-      
+
       // 点击模态框外部关闭
-      modal.onclick = function(event) {
+      modal.onclick = function (event) {
         if (event.target === modal) {
-          modal.style.display = 'none';
-          const container = modal.querySelector('.file-preview-container');
+          modal.style.display = "none";
+          const container = modal.querySelector(".file-preview-container");
           if (container) {
-            container.innerHTML = '';
+            container.innerHTML = "";
           }
         }
       };
     }
-    
+
     // 清空之前的内容
-    const container = modal.querySelector('.file-preview-container');
-    container.innerHTML = '';
-    
+    const container = modal.querySelector(".file-preview-container");
+    container.innerHTML = "";
+
     // 根据文件类型创建预览元素
-    if (fileType === 'pdf') {
-      const iframe = monitorWindow.document.createElement('iframe');
-      iframe.className = 'file-preview-iframe';
+    if (fileType === "pdf") {
+      const iframe = monitorWindow.document.createElement("iframe");
+      iframe.className = "file-preview-iframe";
       iframe.src = url;
       container.appendChild(iframe);
     } else {
       // 图片
-      const img = monitorWindow.document.createElement('img');
-      img.className = 'file-preview-img';
+      const img = monitorWindow.document.createElement("img");
+      img.className = "file-preview-img";
       img.src = url;
       container.appendChild(img);
     }
-    
+
     // 显示模态框
-    modal.style.display = 'block';
+    modal.style.display = "block";
   }
 
   // 显示请求详情
@@ -2249,32 +2272,38 @@
     // 请求体（处理 base64 替换）
     const requestBodySection = monitorWindow.document.createElement("div");
     let requestBodyContent = formatRequestBody(request.requestBody);
-    
+
     // 尝试替换 base64 为文件占位符
     let requestData = request.requestBody;
-    if (typeof requestData === 'string') {
+    if (typeof requestData === "string") {
       try {
         requestData = JSON.parse(requestData);
       } catch (e) {
         // 如果不是 JSON，就保持原样
       }
     }
-    
+
     // 存储 base64 字段信息用于创建下载按钮
     const base64FieldsInfo = [];
-    
-    if (requestData && typeof requestData === 'object') {
+
+    if (requestData && typeof requestData === "object") {
       // 递归替换 base64 字符串
       function replaceBase64InObject(obj) {
-        if (typeof obj === 'string') {
+        if (typeof obj === "string") {
           // 检测 Data URL 或长 base64
-          if (obj.startsWith('data:') || (obj.length > 100 && /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(obj))) {
-            return '[Base64 文件]';
+          if (
+            obj.startsWith("data:") ||
+            (obj.length > 100 &&
+              /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(
+                obj
+              ))
+          ) {
+            return "[Base64 文件]";
           }
           return obj;
         } else if (Array.isArray(obj)) {
-          return obj.map(item => replaceBase64InObject(item));
-        } else if (typeof obj === 'object' && obj !== null) {
+          return obj.map((item) => replaceBase64InObject(item));
+        } else if (typeof obj === "object" && obj !== null) {
           const newObj = {};
           for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
@@ -2285,11 +2314,11 @@
         }
         return obj;
       }
-      
+
       const replacedData = replaceBase64InObject(requestData);
-      requestBodyContent = JSON.stringify(replacedData, null, 2);
+      requestBodyContent = sortedJSONStringify(replacedData, null, 2);
     }
-    
+
     requestBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${requestBodyContent}</pre>
@@ -2309,29 +2338,35 @@
     // 响应体（处理 base64 替换）
     const responseBodySection = monitorWindow.document.createElement("div");
     let responseBodyContent = formatResponseBody(request.responseBody);
-    
+
     // 尝试替换响应体中的 base64 为文件占位符
     let responseData = request.responseBody;
-    if (typeof responseData === 'string') {
+    if (typeof responseData === "string") {
       try {
         responseData = JSON.parse(responseData);
       } catch (e) {
         // 如果不是 JSON，就保持原样
       }
     }
-    
-    if (responseData && typeof responseData === 'object') {
+
+    if (responseData && typeof responseData === "object") {
       // 递归替换 base64 字符串（复用请求体的函数）
       function replaceBase64InObject(obj) {
-        if (typeof obj === 'string') {
+        if (typeof obj === "string") {
           // 检测 Data URL 或长 base64
-          if (obj.startsWith('data:') || (obj.length > 100 && /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(obj))) {
-            return '[Base64 文件]';
+          if (
+            obj.startsWith("data:") ||
+            (obj.length > 100 &&
+              /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(
+                obj
+              ))
+          ) {
+            return "[Base64 文件]";
           }
           return obj;
         } else if (Array.isArray(obj)) {
-          return obj.map(item => replaceBase64InObject(item));
-        } else if (typeof obj === 'object' && obj !== null) {
+          return obj.map((item) => replaceBase64InObject(item));
+        } else if (typeof obj === "object" && obj !== null) {
           const newObj = {};
           for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
@@ -2342,11 +2377,11 @@
         }
         return obj;
       }
-      
+
       const replacedData = replaceBase64InObject(responseData);
-      responseBodyContent = JSON.stringify(replacedData, null, 2);
+      responseBodyContent = sortedJSONStringify(replacedData, null, 2);
     }
-    
+
     responseBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${responseBodyContent}</pre>
@@ -2366,44 +2401,50 @@
     detailPanel.appendChild(basicInfo);
     detailPanel.appendChild(requestHeadersSection);
     detailPanel.appendChild(requestBodySection);
-    
+
     // 检测并添加 base64 下载按钮
     try {
       let requestData = request.requestBody;
-      if (typeof requestData === 'string') {
+      if (typeof requestData === "string") {
         try {
           requestData = JSON.parse(requestData);
         } catch (e) {
           // 如果不是 JSON，就保持原样
         }
       }
-      const base64Downloads = detectBase64AndCreateDownload(requestData, monitorWindow);
+      const base64Downloads = detectBase64AndCreateDownload(
+        requestData,
+        monitorWindow
+      );
       if (base64Downloads) {
         detailPanel.appendChild(base64Downloads);
       }
     } catch (e) {
-      console.error('检测 base64 失败:', e);
+      console.error("检测 base64 失败:", e);
     }
-    
+
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
-    
+
     // 检测并添加响应体的 base64 下载按钮
     try {
       let responseData = request.responseBody;
-      if (typeof responseData === 'string') {
+      if (typeof responseData === "string") {
         try {
           responseData = JSON.parse(responseData);
         } catch (e) {
           // 如果不是 JSON，就保持原样
         }
       }
-      const responseBase64Downloads = detectBase64AndCreateDownload(responseData, monitorWindow);
+      const responseBase64Downloads = detectBase64AndCreateDownload(
+        responseData,
+        monitorWindow
+      );
       if (responseBase64Downloads) {
         detailPanel.appendChild(responseBase64Downloads);
       }
     } catch (e) {
-      console.error('检测响应体 base64 失败:', e);
+      console.error("检测响应体 base64 失败:", e);
     }
 
     // 滚动到顶部
@@ -2415,7 +2456,7 @@
     if (!obj) return "{}";
     if (typeof obj === "string") return obj;
     try {
-      return JSON.stringify(obj, null, 2);
+      return sortedJSONStringify(obj, null, 2);
     } catch {
       return String(obj);
     }
@@ -2437,7 +2478,7 @@
     // 如果是字符串，尝试解析为JSON
     if (typeof body === "string") {
       try {
-        return JSON.stringify(JSON.parse(body), null, 2);
+        return sortedJSONStringify(JSON.parse(body), null, 2);
       } catch {
         return body;
       }
@@ -2454,14 +2495,14 @@
     if (typeof body === "string") {
       try {
         // 尝试解析为JSON
-        return JSON.stringify(JSON.parse(body), null, 2);
+        return sortedJSONStringify(JSON.parse(body), null, 2);
       } catch {
         return body;
       }
     }
 
     try {
-      const jsonStr = JSON.stringify(body, null, 2);
+      const jsonStr = sortedJSONStringify(body, null, 2);
       return jsonStr;
     } catch {
       return String(body);
@@ -2535,6 +2576,82 @@
       // startMonitoring函数已经包含了console方法的拦截，无需重复添加
       startMonitoring();
     }
+  }
+
+  /**
+   * 按 key 首字母排序的 JSON.stringify 实现
+   * @param {any} value 要序列化的值
+   * @param {Function|Array} [replacer] 替换函数/白名单数组（兼容原生）
+   * @param {string|number} [space] 缩进空格（兼容原生）
+   * @returns {string} 排序后的 JSON 字符串
+   */
+  function sortedJSONStringify(value, replacer, space) {
+    // 第一步：兼容原生 replacer 参数（先处理值过滤/转换）
+    if (typeof replacer === "function") {
+      value = replacer.call(null, "", value);
+    } else if (Array.isArray(replacer)) {
+      // replacer 是数组时，仅保留数组中的键
+      const filterObj = (obj) => {
+        if (typeof obj !== "object" || obj === null || Array.isArray(obj))
+          return obj;
+        const res = {};
+        replacer.forEach(
+          (key) => obj.hasOwnProperty(key) && (res[key] = obj[key])
+        );
+        return res;
+      };
+      value = filterObj(value);
+    }
+
+    // 递归序列化核心函数
+    const stringifySorted = (val) => {
+      // 处理 toJSON 方法（如 Date 对象的 toJSON）
+      if (
+        typeof val === "object" &&
+        val !== null &&
+        typeof val.toJSON === "function"
+      ) {
+        val = val.toJSON();
+      }
+
+      // 基本类型：直接序列化
+      if (val === null || typeof val !== "object") {
+        return JSON.stringify(val);
+      }
+
+      // 数组：递归处理每个元素
+      if (Array.isArray(val)) {
+        const arrStr = val.map((item) => stringifySorted(item)).join(",");
+        return `[${arrStr}]`;
+      }
+
+      // 对象：排序键后递归处理值
+      // 按首字母排序（localeCompare 兼容多语言，默认 sort 按 Unicode）
+      const sortedKeys = Object.keys(val).sort((a, b) => a.localeCompare(b));
+      const objStr = sortedKeys
+        .map((key) => {
+          const keyStr = JSON.stringify(key); // 处理键含特殊字符的情况
+          const valueStr = stringifySorted(val[key]);
+          return `${keyStr}:${valueStr}`;
+        })
+        .join(",");
+      return `{${objStr}}`;
+    };
+
+    // 生成排序后的 JSON 字符串
+    let result = stringifySorted(value);
+
+    // 兼容 space 参数（格式化缩进）
+    if (space) {
+      const spaceStr =
+        typeof space === "number"
+          ? " ".repeat(Math.min(space, 10)) // 原生限制最大 10 个空格
+          : space;
+      // 先解析再序列化，利用原生格式化缩进
+      result = JSON.stringify(JSON.parse(result), null, spaceStr);
+    }
+
+    return result;
   }
 
   if (document.readyState === "loading") {
