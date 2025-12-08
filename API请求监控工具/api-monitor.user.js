@@ -60,7 +60,7 @@
         }
         if (typeof arg === "object") {
           try {
-            return sortedJSONStringify(arg, null, 2);
+            return JSON.stringify(arg, null, 2);
           } catch {
             return String(arg);
           }
@@ -532,24 +532,60 @@
       // 添加事件监听器
       const apiTab = monitorWindow.document.getElementById("api-tab");
       const consoleTab = monitorWindow.document.getElementById("console-tab");
-      const localstorageTab = monitorWindow.document.getElementById("localstorage-tab");
-      const sessionstorageTab = monitorWindow.document.getElementById("sessionstorage-tab");
+      const localstorageTab =
+        monitorWindow.document.getElementById("localstorage-tab");
+      const sessionstorageTab =
+        monitorWindow.document.getElementById("sessionstorage-tab");
       const cookieTab = monitorWindow.document.getElementById("cookie-tab");
-      const refreshLocalstorage = monitorWindow.document.getElementById("refresh-localstorage");
-      const refreshSessionstorage = monitorWindow.document.getElementById("refresh-sessionstorage");
-      const refreshCookie = monitorWindow.document.getElementById("refresh-cookie");
-      const clearHistoryBtn = monitorWindow.document.getElementById("clear-history-button");
-      const closeWindowBtn = monitorWindow.document.getElementById("close-window-button");
+      const refreshLocalstorage = monitorWindow.document.getElementById(
+        "refresh-localstorage"
+      );
+      const refreshSessionstorage = monitorWindow.document.getElementById(
+        "refresh-sessionstorage"
+      );
+      const refreshCookie =
+        monitorWindow.document.getElementById("refresh-cookie");
+      const clearHistoryBtn = monitorWindow.document.getElementById(
+        "clear-history-button"
+      );
+      const closeWindowBtn = monitorWindow.document.getElementById(
+        "close-window-button"
+      );
 
-      if (apiTab) apiTab.addEventListener("click", function () { switchTab("api"); });
-      if (consoleTab) consoleTab.addEventListener("click", function () { switchTab("console"); });
-      if (localstorageTab) localstorageTab.addEventListener("click", function () { switchTab("localstorage"); });
-      if (sessionstorageTab) sessionstorageTab.addEventListener("click", function () { switchTab("sessionstorage"); });
-      if (cookieTab) cookieTab.addEventListener("click", function () { switchTab("cookie"); });
-      if (refreshLocalstorage) refreshLocalstorage.addEventListener("click", updateLocalStorageDisplay);
-      if (refreshSessionstorage) refreshSessionstorage.addEventListener("click", updateSessionStorageDisplay);
-      if (refreshCookie) refreshCookie.addEventListener("click", updateCookieDisplay);
-      if (clearHistoryBtn) clearHistoryBtn.addEventListener("click", clearHistory);
+      if (apiTab)
+        apiTab.addEventListener("click", function () {
+          switchTab("api");
+        });
+      if (consoleTab)
+        consoleTab.addEventListener("click", function () {
+          switchTab("console");
+        });
+      if (localstorageTab)
+        localstorageTab.addEventListener("click", function () {
+          switchTab("localstorage");
+        });
+      if (sessionstorageTab)
+        sessionstorageTab.addEventListener("click", function () {
+          switchTab("sessionstorage");
+        });
+      if (cookieTab)
+        cookieTab.addEventListener("click", function () {
+          switchTab("cookie");
+        });
+      if (refreshLocalstorage)
+        refreshLocalstorage.addEventListener(
+          "click",
+          updateLocalStorageDisplay
+        );
+      if (refreshSessionstorage)
+        refreshSessionstorage.addEventListener(
+          "click",
+          updateSessionStorageDisplay
+        );
+      if (refreshCookie)
+        refreshCookie.addEventListener("click", updateCookieDisplay);
+      if (clearHistoryBtn)
+        clearHistoryBtn.addEventListener("click", clearHistory);
       if (closeWindowBtn) {
         closeWindowBtn.addEventListener("click", () => {
           monitorWindow.close();
@@ -562,13 +598,16 @@
       }
 
       // 关闭详情按钮
-      const closeDetailBtn = monitorWindow.document.getElementById("close-detail-button");
+      const closeDetailBtn = monitorWindow.document.getElementById(
+        "close-detail-button"
+      );
       if (closeDetailBtn) {
         closeDetailBtn.addEventListener("click", () => {
           currentlyOpenRequestId = null;
           // 更新请求列表以移除高亮
           updateRequestList();
-          const detailPanel = monitorWindow.document.getElementById("api-detail-panel");
+          const detailPanel =
+            monitorWindow.document.getElementById("api-detail-panel");
           if (detailPanel) {
             detailPanel.style.display = "none";
           }
@@ -576,8 +615,10 @@
       }
 
       // 回到顶部按钮
-      const backToTopBtn = monitorWindow.document.getElementById("back-to-top-btn");
-      const detailPanel = monitorWindow.document.getElementById("api-detail-panel");
+      const backToTopBtn =
+        monitorWindow.document.getElementById("back-to-top-btn");
+      const detailPanel =
+        monitorWindow.document.getElementById("api-detail-panel");
       if (backToTopBtn && detailPanel) {
         backToTopBtn.addEventListener("click", () => {
           detailPanel.scrollTo({ top: 0, behavior: "smooth" });
@@ -595,11 +636,17 @@
     };
 
     // 如果文档已经加载完成，立即执行；否则等待 DOMContentLoaded
-    if (monitorWindow.document.readyState === "complete" || monitorWindow.document.readyState === "interactive") {
+    if (
+      monitorWindow.document.readyState === "complete" ||
+      monitorWindow.document.readyState === "interactive"
+    ) {
       // 使用 setTimeout 确保 DOM 已完全解析
       setTimeout(initEventListeners, 0);
     } else {
-      monitorWindow.document.addEventListener("DOMContentLoaded", initEventListeners);
+      monitorWindow.document.addEventListener(
+        "DOMContentLoaded",
+        initEventListeners
+      );
     }
 
     // 添加自定义消息提示函数到monitorWindow的window对象中
@@ -694,7 +741,6 @@
         }, 100);
       }
     };
-
 
     // 监听窗口关闭事件
     monitorWindow.addEventListener("beforeunload", () => {
@@ -839,12 +885,14 @@
 
         // 获取完整值文本
         const fullValueText = isObject
-          ? sortedJSONStringify(value, null, 2)
+          ? JSON.stringify(value, null, 2)
           : String(value);
 
         // 如果是对象，使用 JSONView 显示
         if (isObject) {
-          const jsonContainerId = `json-localstorage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const jsonContainerId = `json-localstorage-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`;
           const jsonContainer = monitorWindow.document.createElement("div");
           jsonContainer.id = jsonContainerId;
           jsonContainer.style.backgroundColor = "#f8f8f8";
@@ -856,17 +904,20 @@
           const initJSONViewForLocalStorage = () => {
             try {
               if (monitorWindow.jQuery && monitorWindow.jQuery.fn.JSONView) {
-                monitorWindow.jQuery(jsonContainer).JSONView(value, { 
-                  collapsed: true, 
-                  recursive_collapser: true 
+                monitorWindow.jQuery(jsonContainer).JSONView(value, {
+                  collapsed: true,
+                  recursive_collapser: true,
                 });
               } else {
                 // 如果 jQuery 还没加载，等待加载完成
                 const checkAndInit = setInterval(() => {
-                  if (monitorWindow.jQuery && monitorWindow.jQuery.fn.JSONView) {
-                    monitorWindow.jQuery(jsonContainer).JSONView(value, { 
-                      collapsed: true, 
-                      recursive_collapser: true 
+                  if (
+                    monitorWindow.jQuery &&
+                    monitorWindow.jQuery.fn.JSONView
+                  ) {
+                    monitorWindow.jQuery(jsonContainer).JSONView(value, {
+                      collapsed: true,
+                      recursive_collapser: true,
                     });
                     clearInterval(checkAndInit);
                   }
@@ -1115,7 +1166,7 @@
         // 获取完整值文本
         const fullValueText =
           typeof value === "object"
-            ? sortedJSONStringify(value, null, 2)
+            ? JSON.stringify(value, null, 2)
             : String(value);
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
@@ -1347,7 +1398,7 @@
         // 获取完整值文本
         const fullValueText =
           typeof value === "object"
-            ? sortedJSONStringify(value, null, 2)
+            ? JSON.stringify(value, null, 2)
             : String(value);
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
@@ -1867,7 +1918,7 @@
 
       // 保存历史记录到GM_setValue
       try {
-        GM_setValue("apiRequestHistory", sortedJSONStringify(requestHistory));
+        GM_setValue("apiRequestHistory", JSON.stringify(requestHistory));
       } catch (e) {
         console.error("保存请求历史失败:", e);
       }
@@ -2314,10 +2365,15 @@
     const requestHeadersSection = monitorWindow.document.createElement("div");
     const requestHeadersData = request.headers || {};
     const requestHeadersContent = formatObject(requestHeadersData);
-    const isRequestHeadersObject = requestHeadersData && typeof requestHeadersData === "object";
-    const requestHeadersContainerId = `json-request-headers-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const requestHeadersContentId = `json-content-request-headers-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+    const isRequestHeadersObject =
+      requestHeadersData && typeof requestHeadersData === "object";
+    const requestHeadersContainerId = `json-request-headers-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const requestHeadersContentId = `json-content-request-headers-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
     if (isRequestHeadersObject) {
       requestHeadersSection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${requestHeadersContentId}').textContent)">📄</button>
@@ -2383,11 +2439,15 @@
       isRequestBodyJsonObject = true;
       const replacedData = replaceBase64InRequestObject(requestData);
       requestBodyJsonData = replacedData;
-      requestBodyContent = sortedJSONStringify(replacedData, null, 2);
+      requestBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
-    const requestBodyContainerId = `json-request-body-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const requestBodyContentId = `json-content-request-body-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestBodyContainerId = `json-request-body-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const requestBodyContentId = `json-content-request-body-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     if (isRequestBodyJsonObject) {
       requestBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${requestBodyContentId}').textContent)">📄</button>
@@ -2404,11 +2464,18 @@
     // 响应头
     const responseHeadersSection = monitorWindow.document.createElement("div");
     const responseHeadersData = request.responseHeaders || {};
-    const responseHeadersContent = request.responseHeaders ? formatObject(request.responseHeaders) : "N/A";
-    const isResponseHeadersObject = request.responseHeaders && typeof request.responseHeaders === "object";
-    const responseHeadersContainerId = `json-response-headers-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const responseHeadersContentId = `json-content-response-headers-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+    const responseHeadersContent = request.responseHeaders
+      ? formatObject(request.responseHeaders)
+      : "N/A";
+    const isResponseHeadersObject =
+      request.responseHeaders && typeof request.responseHeaders === "object";
+    const responseHeadersContainerId = `json-response-headers-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const responseHeadersContentId = `json-content-response-headers-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
     if (isResponseHeadersObject) {
       responseHeadersSection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${responseHeadersContentId}').textContent)">📄</button>
@@ -2471,11 +2538,15 @@
       isJsonObject = true;
       const replacedData = replaceBase64InObject(responseData);
       jsonDataForView = replacedData;
-      responseBodyContent = sortedJSONStringify(replacedData, null, 2);
+      responseBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
-    const jsonContainerId = `json-response-body-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const jsonContentId = `json-content-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const jsonContainerId = `json-response-body-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const jsonContentId = `json-content-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     if (isJsonObject) {
       responseBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${jsonContentId}').textContent)">📄</button>
@@ -2531,28 +2602,30 @@
     // 辅助函数：初始化 JSONView
     const initJSONView = (containerId, jsonData, fallbackContent) => {
       try {
-        const jsonContainer = monitorWindow.document.getElementById(containerId);
+        const jsonContainer =
+          monitorWindow.document.getElementById(containerId);
         if (jsonContainer) {
           // 为容器添加背景样式
           jsonContainer.style.backgroundColor = "#f8f8f8";
           jsonContainer.style.padding = "8px";
           jsonContainer.style.borderRadius = "4px";
           jsonContainer.style.border = "1px solid #e0e0e0";
-          
+
           if (monitorWindow.jQuery) {
-            monitorWindow.jQuery(jsonContainer).JSONView(jsonData, { 
-              collapsed: true, 
-              recursive_collapser: true 
+            monitorWindow.jQuery(jsonContainer).JSONView(jsonData, {
+              collapsed: true,
+              recursive_collapser: true,
             });
           } else {
             // 如果 jQuery 还没加载，等待加载完成
             const checkAndInit = setInterval(() => {
               if (monitorWindow.jQuery && monitorWindow.jQuery.fn.JSONView) {
-                const container = monitorWindow.document.getElementById(containerId);
+                const container =
+                  monitorWindow.document.getElementById(containerId);
                 if (container) {
-                  monitorWindow.jQuery(container).JSONView(jsonData, { 
-                    collapsed: true, 
-                    recursive_collapser: true 
+                  monitorWindow.jQuery(container).JSONView(jsonData, {
+                    collapsed: true,
+                    recursive_collapser: true,
                   });
                   clearInterval(checkAndInit);
                 }
@@ -2565,7 +2638,8 @@
       } catch (e) {
         console.error("JSONView 初始化失败:", e);
         // 如果 JSONView 失败，回退到普通显示
-        const jsonContainer = monitorWindow.document.getElementById(containerId);
+        const jsonContainer =
+          monitorWindow.document.getElementById(containerId);
         if (jsonContainer && fallbackContent) {
           jsonContainer.innerHTML = `<pre>${fallbackContent}</pre>`;
         }
@@ -2574,17 +2648,29 @@
 
     // 初始化请求头的 JSONView
     if (isRequestHeadersObject && requestHeadersData) {
-      initJSONView(requestHeadersContainerId, requestHeadersData, requestHeadersContent);
+      initJSONView(
+        requestHeadersContainerId,
+        requestHeadersData,
+        requestHeadersContent
+      );
     }
 
     // 初始化请求体的 JSONView
     if (isRequestBodyJsonObject && requestBodyJsonData) {
-      initJSONView(requestBodyContainerId, requestBodyJsonData, requestBodyContent);
+      initJSONView(
+        requestBodyContainerId,
+        requestBodyJsonData,
+        requestBodyContent
+      );
     }
 
     // 初始化响应头的 JSONView
     if (isResponseHeadersObject && responseHeadersData) {
-      initJSONView(responseHeadersContainerId, responseHeadersData, responseHeadersContent);
+      initJSONView(
+        responseHeadersContainerId,
+        responseHeadersData,
+        responseHeadersContent
+      );
     }
 
     // 初始化响应体的 JSONView
@@ -2622,7 +2708,7 @@
     if (!obj) return "{}";
     if (typeof obj === "string") return obj;
     try {
-      return sortedJSONStringify(obj, null, 2);
+      return JSON.stringify(obj, null, 2);
     } catch {
       return String(obj);
     }
@@ -2644,7 +2730,7 @@
     // 如果是字符串，尝试解析为JSON
     if (typeof body === "string") {
       try {
-        return sortedJSONStringify(JSON.parse(body), null, 2);
+        return JSON.stringify(JSON.parse(body), null, 2);
       } catch {
         return body;
       }
@@ -2661,14 +2747,14 @@
     if (typeof body === "string") {
       try {
         // 尝试解析为JSON
-        return sortedJSONStringify(JSON.parse(body), null, 2);
+        return JSON.stringify(JSON.parse(body), null, 2);
       } catch {
         return body;
       }
     }
 
     try {
-      const jsonStr = sortedJSONStringify(body, null, 2);
+      const jsonStr = JSON.stringify(body, null, 2);
       return jsonStr;
     } catch {
       return String(body);
@@ -2742,82 +2828,6 @@
       // startMonitoring函数已经包含了console方法的拦截，无需重复添加
       startMonitoring();
     }
-  }
-
-  /**
-   * 按 key 首字母排序的 JSON.stringify 实现
-   * @param {any} value 要序列化的值
-   * @param {Function|Array} [replacer] 替换函数/白名单数组（兼容原生）
-   * @param {string|number} [space] 缩进空格（兼容原生）
-   * @returns {string} 排序后的 JSON 字符串
-   */
-  function sortedJSONStringify(value, replacer, space) {
-    // 第一步：兼容原生 replacer 参数（先处理值过滤/转换）
-    if (typeof replacer === "function") {
-      value = replacer.call(null, "", value);
-    } else if (Array.isArray(replacer)) {
-      // replacer 是数组时，仅保留数组中的键
-      const filterObj = (obj) => {
-        if (typeof obj !== "object" || obj === null || Array.isArray(obj))
-          return obj;
-        const res = {};
-        replacer.forEach(
-          (key) => obj.hasOwnProperty(key) && (res[key] = obj[key])
-        );
-        return res;
-      };
-      value = filterObj(value);
-    }
-
-    // 递归序列化核心函数
-    const stringifySorted = (val) => {
-      // 处理 toJSON 方法（如 Date 对象的 toJSON）
-      if (
-        typeof val === "object" &&
-        val !== null &&
-        typeof val.toJSON === "function"
-      ) {
-        val = val.toJSON();
-      }
-
-      // 基本类型：直接序列化
-      if (val === null || typeof val !== "object") {
-        return JSON.stringify(val);
-      }
-
-      // 数组：递归处理每个元素
-      if (Array.isArray(val)) {
-        const arrStr = val.map((item) => stringifySorted(item)).join(",");
-        return `[${arrStr}]`;
-      }
-
-      // 对象：排序键后递归处理值
-      // 按首字母排序（localeCompare 兼容多语言，默认 sort 按 Unicode）
-      const sortedKeys = Object.keys(val).sort((a, b) => a.localeCompare(b));
-      const objStr = sortedKeys
-        .map((key) => {
-          const keyStr = JSON.stringify(key); // 处理键含特殊字符的情况
-          const valueStr = stringifySorted(val[key]);
-          return `${keyStr}:${valueStr}`;
-        })
-        .join(",");
-      return `{${objStr}}`;
-    };
-
-    // 生成排序后的 JSON 字符串
-    let result = stringifySorted(value);
-
-    // 兼容 space 参数（格式化缩进）
-    if (space) {
-      const spaceStr =
-        typeof space === "number"
-          ? " ".repeat(Math.min(space, 10)) // 原生限制最大 10 个空格
-          : space;
-      // 先解析再序列化，利用原生格式化缩进
-      result = JSON.stringify(JSON.parse(result), null, spaceStr);
-    }
-
-    return result;
   }
 
   if (document.readyState === "loading") {
