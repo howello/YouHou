@@ -9,6 +9,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_addStyle
 // @run-at       document-start
 // @noframes
 // @icon         https://ybj.shanxi.gov.cn/ybfw/hallEnter/favicon.ico
@@ -259,7 +260,12 @@
     // 创建新窗口
     const windowFeatures =
       "width=800,height=600,toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes";
-    monitorWindow = window.open("", "apiMonitorWindow", windowFeatures);
+    monitorWindow = window.open("about:blank", "apiMonitorWindow", windowFeatures);
+    
+    if (!monitorWindow) {
+      alert("无法打开新窗口，请检查浏览器弹窗设置");
+      return;
+    }
 
     // 设置新窗口内容
     const html = `
@@ -472,9 +478,6 @@
             margin: auto;
           }
         </style>
-        <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.min.css">
-        <script src="https://libs.baidu.com/jquery/2.0.3/jquery.min.js"></script>
-        <script src="https://cdn.bootcdn.net/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.min.js"></script>
       </head>
       <body>
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -524,8 +527,52 @@
       </html>
     `;
 
-    monitorWindow.document.write(html);
-    monitorWindow.document.close();
+    // 立即写入内容到新窗口
+    try {
+      monitorWindow.document.open();
+      monitorWindow.document.write(html);
+      monitorWindow.document.close();
+    } catch (e) {
+      console.error('写入页面内容失败:', e);
+      // 如果 write 失败，尝试备用方案
+      setTimeout(() => {
+        try {
+          const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+          const headMatch = html.match(/<head[^>]*>([\s\S]*)<\/head>/i);
+          if (headMatch && monitorWindow.document.head) {
+            monitorWindow.document.head.innerHTML = headMatch[1];
+          }
+          if (bodyMatch && monitorWindow.document.body) {
+            monitorWindow.document.body.innerHTML = bodyMatch[1];
+          }
+        } catch (e2) {
+          console.error('备用方案也失败:', e2);
+        }
+      }, 100);
+    }
+    
+    // 动态加载 JsonTree CSS 和 JS，避免阻塞页面渲染
+    setTimeout(() => {
+      try {
+        // 加载 CSS
+        const link = monitorWindow.document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/gh/williamtroup/JsonTree.js@4.7.1/dist/jsontree.js.min.css';
+        link.onerror = () => console.error('JsonTree CSS 加载失败');
+        monitorWindow.document.head.appendChild(link);
+        
+        // 加载 JS
+        const script = monitorWindow.document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/gh/williamtroup/JsonTree.js@4.7.1/dist/jsontree.min.js';
+        script.onerror = () => console.error('JsonTree JS 加载失败');
+        script.onload = () => {
+          console.log('JsonTree 加载完成');
+        };
+        monitorWindow.document.body.appendChild(script);
+      } catch (e) {
+        console.error('加载 JsonTree 资源失败:', e);
+      }
+    }, 100);
 
     // 等待 DOM 完全加载后再添加事件监听器
     const initEventListeners = () => {
@@ -888,7 +935,7 @@
           ? JSON.stringify(value, null, 2)
           : String(value);
 
-        // 如果是对象，使用 JSONView 显示
+        // 如果是对象，使用 JsonTree 显示
         if (isObject) {
           const jsonContainerId = `json-localstorage-${Date.now()}-${Math.random()
             .toString(36)
@@ -900,34 +947,68 @@
           jsonContainer.style.borderRadius = "4px";
           jsonContainer.style.border = "1px solid #e0e0e0";
 
-          // 初始化 JSONView
-          const initJSONViewForLocalStorage = () => {
+          // 初始化 JsonTree
+          const initJsonTreeForLocalStorage = () => {
             try {
-              if (monitorWindow.jQuery && monitorWindow.jQuery.fn.JSONView) {
-                monitorWindow.jQuery(jsonContainer).JSONView(value, {
-                  collapsed: true,
-                  recursive_collapser: true,
+              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+              if (JsonTreeClass) {
+                new JsonTreeClass(jsonContainer, {
+                  data: value,
+                  title: {
+                    enableFullScreenToggling: false,
+                    showFullScreenButton: false,
+                  },
+                  footer: {},
+                  controlPanel: {
+                    showMovingButtons: false,
+                    showEditButton: false,
+                    showImportButton: false,
+                  },
+                  sideMenu: {
+                    enabled: false,
+                  },
                 });
               } else {
-                // 如果 jQuery 还没加载，等待加载完成
+                // 如果 JsonTree 还没加载，等待加载完成
                 const checkAndInit = setInterval(() => {
-                  if (
-                    monitorWindow.jQuery &&
-                    monitorWindow.jQuery.fn.JSONView
-                  ) {
-                    monitorWindow.jQuery(jsonContainer).JSONView(value, {
-                      collapsed: true,
-                      recursive_collapser: true,
+                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+                  if (JsonTreeClass) {
+                    new JsonTreeClass(jsonContainer, {
+                      data: value,
+                      title: {
+                        enableFullScreenToggling: false,
+                        showFullScreenButton: false,
+                      },
+                      footer: {},
+                      controlPanel: {
+                        showMovingButtons: false,
+                        showEditButton: false,
+                        showImportButton: false,
+                      },
+                      sideMenu: {
+                        enabled: false,
+                      },
                     });
                     clearInterval(checkAndInit);
                   }
-                }, 50);
-                // 10秒后停止检查
-                setTimeout(() => clearInterval(checkAndInit), 10000);
+                }, 100);
+                // 10秒后停止检查，回退到普通显示
+                setTimeout(() => {
+                  clearInterval(checkAndInit);
+                  const preElement = monitorWindow.document.createElement("pre");
+                  preElement.textContent = fullValueText;
+                  preElement.style.margin = "0";
+                  preElement.style.whiteSpace = "pre-wrap";
+                  preElement.style.wordBreak = "break-all";
+                  preElement.style.fontFamily = "monospace";
+                  preElement.style.fontSize = "12px";
+                  jsonContainer.innerHTML = "";
+                  jsonContainer.appendChild(preElement);
+                }, 10000);
               }
             } catch (e) {
-              console.error("JSONView 初始化失败:", e);
-              // 如果 JSONView 失败，回退到普通显示
+              console.error("JsonTree 初始化失败:", e);
+              // 如果 JsonTree 失败，回退到普通显示
               const preElement = monitorWindow.document.createElement("pre");
               preElement.textContent = fullValueText;
               preElement.style.margin = "0";
@@ -940,8 +1021,8 @@
             }
           };
 
-          // 立即尝试初始化，如果失败则等待
-          initJSONViewForLocalStorage();
+          // 延迟初始化，确保 JsonTree 已加载
+          setTimeout(initJsonTreeForLocalStorage, 200);
 
           return jsonContainer;
         }
@@ -1161,13 +1242,105 @@
 
       // 创建展开/收缩切换函数
       function createExpandableValue(monitorWindow, value) {
-        const valueContainer = monitorWindow.document.createElement("div");
+        // 判断是否为对象
+        const isObject = value && typeof value === "object";
 
         // 获取完整值文本
-        const fullValueText =
-          typeof value === "object"
-            ? JSON.stringify(value, null, 2)
-            : String(value);
+        const fullValueText = isObject
+          ? JSON.stringify(value, null, 2)
+          : String(value);
+
+        // 如果是对象，使用 JsonTree 显示
+        if (isObject) {
+          const jsonContainerId = `json-sessionstorage-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`;
+          const jsonContainer = monitorWindow.document.createElement("div");
+          jsonContainer.id = jsonContainerId;
+          jsonContainer.style.backgroundColor = "#f8f8f8";
+          jsonContainer.style.padding = "8px";
+          jsonContainer.style.borderRadius = "4px";
+          jsonContainer.style.border = "1px solid #e0e0e0";
+
+          // 初始化 JsonTree
+          const initJsonTreeForSessionStorage = () => {
+            try {
+              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+              if (JsonTreeClass) {
+                new JsonTreeClass(jsonContainer, {
+                  data: value,
+                  title: {
+                    enableFullScreenToggling: false,
+                    showFullScreenButton: false,
+                  },
+                  footer: {},
+                  controlPanel: {
+                    showMovingButtons: false,
+                    showEditButton: false,
+                    showImportButton: false,
+                  },
+                  sideMenu: {
+                    enabled: false,
+                  },
+                });
+              } else {
+                // 如果 JsonTree 还没加载，等待加载完成
+                const checkAndInit = setInterval(() => {
+                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+                  if (JsonTreeClass) {
+                    new JsonTreeClass(jsonContainer, {
+                      data: value,
+                      title: {
+                        enableFullScreenToggling: false,
+                        showFullScreenButton: false,
+                      },
+                      footer: {},
+                      controlPanel: {
+                        showMovingButtons: false,
+                        showEditButton: false,
+                        showImportButton: false,
+                      },
+                      sideMenu: {
+                        enabled: false,
+                      },
+                    });
+                    clearInterval(checkAndInit);
+                  }
+                }, 100);
+                // 10秒后停止检查，回退到普通显示
+                setTimeout(() => {
+                  clearInterval(checkAndInit);
+                  const preElement = monitorWindow.document.createElement("pre");
+                  preElement.textContent = fullValueText;
+                  preElement.style.margin = "0";
+                  preElement.style.whiteSpace = "pre-wrap";
+                  preElement.style.wordBreak = "break-all";
+                  preElement.style.fontFamily = "monospace";
+                  preElement.style.fontSize = "12px";
+                  jsonContainer.innerHTML = "";
+                  jsonContainer.appendChild(preElement);
+                }, 10000);
+              }
+            } catch (e) {
+              console.error("JsonTree 初始化失败:", e);
+              // 如果 JsonTree 失败，回退到普通显示
+              const preElement = monitorWindow.document.createElement("pre");
+              preElement.textContent = fullValueText;
+              preElement.style.margin = "0";
+              preElement.style.whiteSpace = "pre-wrap";
+              preElement.style.wordBreak = "break-all";
+              preElement.style.fontFamily = "monospace";
+              preElement.style.fontSize = "12px";
+              jsonContainer.innerHTML = "";
+              jsonContainer.appendChild(preElement);
+            }
+          };
+
+          // 延迟初始化，确保 JsonTree 已加载
+          setTimeout(initJsonTreeForSessionStorage, 200);
+
+          return jsonContainer;
+        }
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
         if (fullValueText.length <= 50) {
@@ -1177,6 +1350,8 @@
           simpleElement.style.fontSize = "12px";
           return simpleElement;
         }
+
+        const valueContainer = monitorWindow.document.createElement("div");
 
         // 设置容器样式，使整个区域可点击
         valueContainer.style.cursor = "pointer";
@@ -1393,13 +1568,105 @@
 
       // 创建展开/收缩切换函数
       function createExpandableValue(monitorWindow, value) {
-        const valueContainer = monitorWindow.document.createElement("div");
+        // 判断是否为对象
+        const isObject = value && typeof value === "object";
 
         // 获取完整值文本
-        const fullValueText =
-          typeof value === "object"
-            ? JSON.stringify(value, null, 2)
-            : String(value);
+        const fullValueText = isObject
+          ? JSON.stringify(value, null, 2)
+          : String(value);
+
+        // 如果是对象，使用 JsonTree 显示
+        if (isObject) {
+          const jsonContainerId = `json-cookie-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`;
+          const jsonContainer = monitorWindow.document.createElement("div");
+          jsonContainer.id = jsonContainerId;
+          jsonContainer.style.backgroundColor = "#f8f8f8";
+          jsonContainer.style.padding = "8px";
+          jsonContainer.style.borderRadius = "4px";
+          jsonContainer.style.border = "1px solid #e0e0e0";
+
+          // 初始化 JsonTree
+          const initJsonTreeForCookie = () => {
+            try {
+              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+              if (JsonTreeClass) {
+                new JsonTreeClass(jsonContainer, {
+                  data: value,
+                  title: {
+                    enableFullScreenToggling: false,
+                    showFullScreenButton: false,
+                  },
+                  footer: {},
+                  controlPanel: {
+                    showMovingButtons: false,
+                    showEditButton: false,
+                    showImportButton: false,
+                  },
+                  sideMenu: {
+                    enabled: false,
+                  },
+                });
+              } else {
+                // 如果 JsonTree 还没加载，等待加载完成
+                const checkAndInit = setInterval(() => {
+                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+                  if (JsonTreeClass) {
+                    new JsonTreeClass(jsonContainer, {
+                      data: value,
+                      title: {
+                        enableFullScreenToggling: false,
+                        showFullScreenButton: false,
+                      },
+                      footer: {},
+                      controlPanel: {
+                        showMovingButtons: false,
+                        showEditButton: false,
+                        showImportButton: false,
+                      },
+                      sideMenu: {
+                        enabled: false,
+                      },
+                    });
+                    clearInterval(checkAndInit);
+                  }
+                }, 100);
+                // 10秒后停止检查，回退到普通显示
+                setTimeout(() => {
+                  clearInterval(checkAndInit);
+                  const preElement = monitorWindow.document.createElement("pre");
+                  preElement.textContent = fullValueText;
+                  preElement.style.margin = "0";
+                  preElement.style.whiteSpace = "pre-wrap";
+                  preElement.style.wordBreak = "break-all";
+                  preElement.style.fontFamily = "monospace";
+                  preElement.style.fontSize = "12px";
+                  jsonContainer.innerHTML = "";
+                  jsonContainer.appendChild(preElement);
+                }, 10000);
+              }
+            } catch (e) {
+              console.error("JsonTree 初始化失败:", e);
+              // 如果 JsonTree 失败，回退到普通显示
+              const preElement = monitorWindow.document.createElement("pre");
+              preElement.textContent = fullValueText;
+              preElement.style.margin = "0";
+              preElement.style.whiteSpace = "pre-wrap";
+              preElement.style.wordBreak = "break-all";
+              preElement.style.fontFamily = "monospace";
+              preElement.style.fontSize = "12px";
+              jsonContainer.innerHTML = "";
+              jsonContainer.appendChild(preElement);
+            }
+          };
+
+          // 延迟初始化，确保 JsonTree 已加载
+          setTimeout(initJsonTreeForCookie, 200);
+
+          return jsonContainer;
+        }
 
         // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
         if (fullValueText.length <= 50) {
@@ -1409,6 +1676,8 @@
           simpleElement.style.fontSize = "12px";
           return simpleElement;
         }
+
+        const valueContainer = monitorWindow.document.createElement("div");
 
         // 设置容器样式，使整个区域可点击
         valueContainer.style.cursor = "pointer";
@@ -2599,8 +2868,8 @@
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
 
-    // 辅助函数：初始化 JSONView
-    const initJSONView = (containerId, jsonData, fallbackContent) => {
+    // 辅助函数：初始化 JsonTree
+    const initJsonTree = (containerId, jsonData, fallbackContent) => {
       try {
         const jsonContainer =
           monitorWindow.document.getElementById(containerId);
@@ -2611,33 +2880,81 @@
           jsonContainer.style.borderRadius = "4px";
           jsonContainer.style.border = "1px solid #e0e0e0";
 
-          if (monitorWindow.jQuery) {
-            monitorWindow.jQuery(jsonContainer).JSONView(jsonData, {
-              collapsed: true,
-              recursive_collapser: true,
-            });
-          } else {
-            // 如果 jQuery 还没加载，等待加载完成
-            const checkAndInit = setInterval(() => {
-              if (monitorWindow.jQuery && monitorWindow.jQuery.fn.JSONView) {
-                const container =
-                  monitorWindow.document.getElementById(containerId);
-                if (container) {
-                  monitorWindow.jQuery(container).JSONView(jsonData, {
-                    collapsed: true,
-                    recursive_collapser: true,
-                  });
+          // 初始化 JsonTree - 在 monitorWindow 的上下文中执行
+          const initTree = () => {
+            try {
+              // 在 monitorWindow 的全局作用域中访问 JsonTree
+              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+              if (JsonTreeClass) {
+                new JsonTreeClass(jsonContainer, {
+                  data: jsonData,
+                  title: {
+                    enableFullScreenToggling: false,
+                    showFullScreenButton: false,
+                  },
+                  footer: {},
+                  controlPanel: {
+                    showMovingButtons: false,
+                    showEditButton: false,
+                    showImportButton: false,
+                  },
+                  sideMenu: {
+                    enabled: false,
+                  },
+                });
+              } else {
+                // 如果 JsonTree 还没加载，等待加载完成
+                const checkAndInit = setInterval(() => {
+                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
+                  if (JsonTreeClass) {
+                    const container =
+                      monitorWindow.document.getElementById(containerId);
+                    if (container) {
+                      new JsonTreeClass(container, {
+                        data: jsonData,
+                        title: {
+                          enableFullScreenToggling: false,
+                          showFullScreenButton: false,
+                        },
+                        footer: {},
+                        controlPanel: {
+                          showMovingButtons: false,
+                          showEditButton: false,
+                          showImportButton: false,
+                        },
+                        sideMenu: {
+                          enabled: false,
+                        },
+                      });
+                      clearInterval(checkAndInit);
+                    }
+                  }
+                }, 100);
+                // 10秒后停止检查，回退到普通显示
+                setTimeout(() => {
                   clearInterval(checkAndInit);
-                }
+                  // 如果 JsonTree 仍未加载，回退到普通显示
+                  const container = monitorWindow.document.getElementById(containerId);
+                  if (container && fallbackContent) {
+                    container.innerHTML = `<pre>${fallbackContent}</pre>`;
+                  }
+                }, 10000);
               }
-            }, 50);
-            // 10秒后停止检查
-            setTimeout(() => clearInterval(checkAndInit), 10000);
-          }
+            } catch (e) {
+              console.error("JsonTree 初始化错误:", e);
+              // 出错时回退到普通显示
+              if (fallbackContent) {
+                jsonContainer.innerHTML = `<pre>${fallbackContent}</pre>`;
+              }
+            }
+          };
+
+          // 延迟初始化，确保 JsonTree 已加载
+          setTimeout(initTree, 200);
         }
       } catch (e) {
-        console.error("JSONView 初始化失败:", e);
-        // 如果 JSONView 失败，回退到普通显示
+        console.error("JsonTree 初始化失败:", e);
+        // 如果 JsonTree 失败，回退到普通显示
         const jsonContainer =
           monitorWindow.document.getElementById(containerId);
         if (jsonContainer && fallbackContent) {
@@ -2646,36 +2963,36 @@
       }
     };
 
-    // 初始化请求头的 JSONView
+    // 初始化请求头的 JsonTree
     if (isRequestHeadersObject && requestHeadersData) {
-      initJSONView(
+      initJsonTree(
         requestHeadersContainerId,
         requestHeadersData,
         requestHeadersContent
       );
     }
 
-    // 初始化请求体的 JSONView
+    // 初始化请求体的 JsonTree
     if (isRequestBodyJsonObject && requestBodyJsonData) {
-      initJSONView(
+      initJsonTree(
         requestBodyContainerId,
         requestBodyJsonData,
         requestBodyContent
       );
     }
 
-    // 初始化响应头的 JSONView
+    // 初始化响应头的 JsonTree
     if (isResponseHeadersObject && responseHeadersData) {
-      initJSONView(
+      initJsonTree(
         responseHeadersContainerId,
         responseHeadersData,
         responseHeadersContent
       );
     }
 
-    // 初始化响应体的 JSONView
+    // 初始化响应体的 JsonTree
     if (isJsonObject && jsonDataForView) {
-      initJSONView(jsonContainerId, jsonDataForView, responseBodyContent);
+      initJsonTree(jsonContainerId, jsonDataForView, responseBodyContent);
     }
 
     // 检测并添加响应体的 base64 下载按钮
