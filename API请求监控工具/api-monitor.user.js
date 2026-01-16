@@ -59,11 +59,35 @@
             arg.stack ? "\n" + arg.stack : ""
           }`;
         }
+        // 处理异常对象，即使不是Error实例
+        if (arg && typeof arg === "object" && (arg.message || arg.stack || arg.name)) {
+          const name = arg.name || "Object";
+          const message = arg.message || "";
+          const stack = arg.stack || "";
+          if (stack) {
+            return `${name}: ${message}\n${stack}`;
+          } else if (message) {
+            return `${name}: ${message}`;
+          }
+        }
         if (typeof arg === "object") {
           try {
             return JSON.stringify(arg, null, 2);
-          } catch {
-            return String(arg);
+          } catch (e) {
+            try {
+              const seen = new WeakSet();
+              return JSON.stringify(arg, (key, value) => {
+                if (typeof value === "object" && value !== null) {
+                  if (seen.has(value)) {
+                    return "[Circular]";
+                  }
+                  seen.add(value);
+                }
+                return value;
+              }, 2);
+            } catch (e2) {
+              return String(arg);
+            }
           }
         }
         return String(arg);
@@ -79,8 +103,15 @@
       consoleLogs.splice(0, consoleLogs.length, ...newLogs);
     }
 
-    // 更新显示
-    updateConsoleLogs();
+    // 更新显示（仅在monitorWindow可用时更新）
+    try {
+      if (typeof monitorWindow !== 'undefined' && monitorWindow && !monitorWindow.closed) {
+        setTimeout(() => {
+          updateConsoleLogs();
+        }, 0);
+      }
+    } catch (e) {
+    }
   }
 
   // 立即拦截控制台方法，确保从页面加载开始就能捕获所有日志
@@ -109,14 +140,348 @@
       addConsoleLog("debug", ...args);
       originalConsole.debug.apply(console, args);
     };
+    
+    // 拦截 trace 方法以捕获堆栈跟踪
+    console.trace = function (...args) {
+      addConsoleLog("trace", ...args);
+      originalConsole.trace.apply(console, args);
+    };
+    
+    // 拦截其他控制台方法
+    if (originalConsole.table) {
+      console.table = function (...args) {
+        addConsoleLog("table", ...args);
+        originalConsole.table.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.time) {
+      console.time = function (...args) {
+        addConsoleLog("time", ...args);
+        originalConsole.time.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.timeEnd) {
+      console.timeEnd = function (...args) {
+        addConsoleLog("timeEnd", ...args);
+        originalConsole.timeEnd.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.timeLog) {
+      console.timeLog = function (...args) {
+        addConsoleLog("timeLog", ...args);
+        originalConsole.timeLog.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.count) {
+      console.count = function (...args) {
+        addConsoleLog("count", ...args);
+        originalConsole.count.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.countReset) {
+      console.countReset = function (...args) {
+        addConsoleLog("countReset", ...args);
+        originalConsole.countReset.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.group) {
+      console.group = function (...args) {
+        addConsoleLog("group", ...args);
+        originalConsole.group.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.groupCollapsed) {
+      console.groupCollapsed = function (...args) {
+        addConsoleLog("groupCollapsed", ...args);
+        originalConsole.groupCollapsed.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.groupEnd) {
+      console.groupEnd = function (...args) {
+        addConsoleLog("groupEnd", ...args);
+        originalConsole.groupEnd.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.clear) {
+      console.clear = function (...args) {
+        addConsoleLog("clear", ...args);
+        originalConsole.clear.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.assert) {
+      console.assert = function (...args) {
+        addConsoleLog("assert", ...args);
+        originalConsole.assert.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.dir) {
+      console.dir = function (...args) {
+        addConsoleLog("dir", ...args);
+        originalConsole.dir.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.dirxml) {
+      console.dirxml = function (...args) {
+        addConsoleLog("dirxml", ...args);
+        originalConsole.dirxml.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.profile) {
+      console.profile = function (...args) {
+        addConsoleLog("profile", ...args);
+        originalConsole.profile.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.profileEnd) {
+      console.profileEnd = function (...args) {
+        addConsoleLog("profileEnd", ...args);
+        originalConsole.profileEnd.apply(console, args);
+      };
+    }
+    
+    if (originalConsole.timeStamp) {
+      console.timeStamp = function (...args) {
+        addConsoleLog("timeStamp", ...args);
+        originalConsole.timeStamp.apply(console, args);
+      };
+    }
   })();
+
+  // 注入脚本以捕获页面主上下文（Main World）的控制台日志
+  // 解决沙箱隔离导致无法捕获页面脚本（如Vue、ElementUI）产生的日志的问题
+  (function injectConsoleInterceptor() {
+    try {
+      const scriptContent = `
+        (function() {
+          // 防止重复注入
+          if (window.__api_monitor_intercepted) return;
+          window.__api_monitor_intercepted = true;
+          
+          const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info,
+            debug: console.debug
+          };
+
+          // 格式化参数为字符串，处理循环引用和Error对象
+          function formatArgs(args) {
+            return args.map(arg => {
+              try {
+                if (arg === null) return "null";
+                if (arg === undefined) return "undefined";
+                if (arg instanceof Error) {
+                  return arg.name + ": " + arg.message + (arg.stack ? "\\n" + arg.stack : "");
+                }
+                // 处理类似Error的对象
+                if (arg && typeof arg === "object" && (arg.message || arg.stack || arg.name)) {
+                   const name = arg.name || "Object";
+                   const message = arg.message || "";
+                   const stack = arg.stack || "";
+                   if (stack) return name + ": " + message + "\\n" + stack;
+                   if (message) return name + ": " + message;
+                }
+                if (typeof arg === "object") {
+                  const seen = new WeakSet();
+                  return JSON.stringify(arg, (key, value) => {
+                    if (typeof value === "object" && value !== null) {
+                      if (seen.has(value)) return "[Circular]";
+                      seen.add(value);
+                    }
+                    return value;
+                  }, 2);
+                }
+                return String(arg);
+              } catch (e) {
+                return String(arg);
+              }
+            }).join(" ");
+          }
+
+          // 拦截指定的控制台方法
+          function intercept(type) {
+            if (!originalConsole[type]) return;
+            console[type] = function(...args) {
+              try {
+                // 格式化日志内容
+                let content = formatArgs(args);
+                
+                // 尝试获取堆栈信息并添加到日志中
+                try {
+                  const err = new Error();
+                  if (err.stack) {
+                    // stack format usually:
+                    // Error
+                    //    at console.warn (<anonymous>:...)
+                    //    at <user_code>
+                    const lines = err.stack.split('\\n');
+                    // Skip the first line (Error) and the second line (this interceptor function)
+                    // We want to show where the log actually happened
+                    if (lines.length > 2) {
+                       // Find the first line that is NOT from our interceptor code
+                       // Since this is an injected script, identifying "our" code might be tricky 
+                       // but generally simply skipping the top frames is enough.
+                       // We append the stack trace starting from the caller
+                       const callerStack = lines.slice(2).join('\\n');
+                       if (callerStack) {
+                         content += '\\n\\n[Stack Trace]\\n' + callerStack;
+                       }
+                    }
+                  }
+                } catch (stackErr) {
+                  // ignore stack capture errors
+                }
+
+                // 发送自定义事件给用户脚本
+                window.dispatchEvent(new CustomEvent('api-monitor-console-log', {
+                  detail: { type, content }
+                }));
+              } catch (e) {
+                // 忽略错误，防止破坏应用
+              }
+              // 调用原始方法
+              originalConsole[type].apply(console, args);
+            };
+          }
+
+          ['log', 'error', 'warn', 'info', 'debug'].forEach(intercept);
+        })();
+      `;
+
+      const script = document.createElement('script');
+      script.textContent = scriptContent;
+      (document.head || document.documentElement).appendChild(script);
+      script.remove(); // 执行后移除标签
+      
+      // 监听来自页面上下文的日志事件
+      window.addEventListener('api-monitor-console-log', function(e) {
+        if (e.detail) {
+          addConsoleLog(e.detail.type, e.detail.content);
+        }
+      });
+      
+    } catch (e) {
+      console.error('注入控制台拦截脚本失败:', e);
+    }
+  })();
+  
+  // 捕获未处理的异常
+  window.addEventListener('error', function(event) {
+    addConsoleLog('error', `Uncaught Error: ${event.message}\n${event.filename}:${event.lineno}:${event.colno}\nSTACK: ${event.error?.stack || 'No stack trace'}`);
+  });
+  
+  // 捕获未处理的Promise拒绝
+  window.addEventListener('unhandledrejection', function(event) {
+    addConsoleLog('error', `Unhandled Promise Rejection: ${event.reason || 'Unknown reason'}\nSTACK: ${event.reason?.stack || 'No stack trace'}`);
+  });
+  
+  // 捕获资源加载错误
+  window.addEventListener('load', function() {
+    // 使用 PerformanceObserver 捕获资源加载问题
+    if (window.PerformanceObserver) {
+      const perfObserver = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          if (entry.entryType === 'resource') {
+            // 检查资源加载时间过长的情况
+            if (entry.duration > 5000) { // 超过5秒的资源加载
+              addConsoleLog('warn', `Slow Resource Loading: ${entry.name} took ${Math.round(entry.duration)}ms`);
+            }
+            
+            // 检查资源加载错误
+            if (entry.transferSize === 0 && entry.decodedBodySize > 0) {
+              addConsoleLog('error', `Resource Failed to Load: ${entry.name}`);
+            }
+          } else if (entry.entryType === 'navigation') {
+            // 检查页面加载性能问题
+            if (entry.loadEventEnd - entry.fetchStart > 10000) { // 页面加载超过10秒
+              addConsoleLog('warn', `Slow Page Load: took ${Math.round(entry.loadEventEnd - entry.fetchStart)}ms`);
+            }
+          }
+        });
+      });
+      
+      try {
+        perfObserver.observe({entryTypes: ['resource', 'navigation']});
+      } catch(e) {
+        console.warn('Could not start PerformanceObserver:', e.message);
+      }
+    }
+  });
+  
+  // 监听资源加载错误
+  window.addEventListener('error', function(event) {
+    if (event.target !== window) {
+      // 这是一个资源加载错误（如图片、脚本、样式表等）
+      addConsoleLog('error', `Resource Load Error: ${event.target.localName || 'Unknown'} - ${event.target.src || event.target.href || 'Unknown source'}`);
+    }
+  }, true);  // 使用捕获阶段
+  
+  // 使用 MutationObserver 监视页面上的错误信息
+  if (window.MutationObserver) {
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // 检查是否有错误或警告相关的类名或文本
+            const textContent = node.textContent || '';
+            const className = node.className || '';
+            const tagName = node.tagName || '';
+            
+            // 检查是否包含错误或警告信息
+            if (textContent.toLowerCase().includes('error') || 
+                textContent.toLowerCase().includes('warn') ||
+                textContent.toLowerCase().includes('failed') ||
+                className.toLowerCase().includes('error') ||
+                className.toLowerCase().includes('warn')) {
+              addConsoleLog('info', `Potential Warning/Alert in DOM: ${textContent.substring(0, 200)}`);
+            }
+          }
+        });
+      });
+    });
+    
+    // 确保document.body存在后再开始观察
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    } else {
+      // 如果document.body尚不存在，等待DOM加载完成
+      document.addEventListener('DOMContentLoaded', function() {
+        if (document.body) {
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        }
+      });
+    }
+  }
 
   // 全局变量用于存储监控窗口
   let monitorWindow = null;
-  // 用于存储当前打开的请求ID
+
+  // 提前定义并初始化监控窗口相关变量，防止在初始化前访问
   let currentlyOpenRequestId = null;
   // 用于存储监控状态提示图标
   let statusIcon = null;
+
 
   // 更新状态图标视觉效果
   function updateStatusIconVisuals() {
@@ -378,6 +743,8 @@
             margin-bottom: 4px;
             padding: 4px;
             border-radius: 2px;
+            white-space: pre-wrap;
+            word-break: break-all;
           }
           .console-log.log { color: #d4d4d4; }
           .console-log.error { color: #f44336; background-color: rgba(244, 67, 54, 0.1); }
@@ -1824,35 +2191,36 @@
 
   // 更新控制台日志显示
   function updateConsoleLogs() {
-    if (!monitorWindow || monitorWindow.closed) return;
-
+    // 检查 monitorWindow 是否已定义且有效
+    if (typeof monitorWindow === 'undefined' || !monitorWindow || monitorWindow.closed) return;
+  
     const consolePanel = monitorWindow.document.getElementById("console-panel");
     if (!consolePanel) return;
-
+  
     consolePanel.innerHTML = "";
-
+  
     // 限制显示最近200条日志
     const recentLogs = consoleLogs.slice(-200);
-
+  
     recentLogs.forEach((log) => {
       const logElement = monitorWindow.document.createElement("div");
       logElement.className = `console-log ${log.type}`;
-
+  
       // 格式化时间
       const timeSpan = monitorWindow.document.createElement("span");
       timeSpan.style.color = "#888";
       timeSpan.style.marginRight = "10px";
       timeSpan.textContent = log.timestamp;
-
+  
       // 格式化日志内容
       const contentSpan = monitorWindow.document.createElement("span");
       contentSpan.textContent = log.content;
-
+  
       logElement.appendChild(timeSpan);
       logElement.appendChild(contentSpan);
       consolePanel.appendChild(logElement);
     });
-
+  
     // 自动滚动到底部
     consolePanel.scrollTop = consolePanel.scrollHeight;
   }
@@ -1883,7 +2251,11 @@
     const keywords = getMonitorKeywords();
     const currentKeywords = keywords.join(", ");
     const input = prompt(
-      `请输入要监控的URL关键字（多个关键字用逗号分隔）：\n\n当前监控的关键字：${currentKeywords}\n\n例如：has-pss-cw-local, hsa-pss-pw`,
+      `请输入要监控的URL关键字（多个关键字用逗号分隔）：
+
+当前监控的关键字：${currentKeywords}
+
+例如：has-pss-cw-local, hsa-pss-pw`,
       currentKeywords
     );
 
