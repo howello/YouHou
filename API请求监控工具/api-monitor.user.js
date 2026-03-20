@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.5
+// @version      2.6
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -918,28 +918,7 @@
       }, 100);
     }
     
-    // 动态加载 JsonTree CSS 和 JS，避免阻塞页面渲染
-    setTimeout(() => {
-      try {
-        // 加载 CSS
-        const link = monitorWindow.document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://cdn.jsdelivr.net/gh/williamtroup/JsonTree.js@4.7.1/dist/jsontree.js.min.css';
-        link.onerror = () => console.error('JsonTree CSS 加载失败');
-        monitorWindow.document.head.appendChild(link);
-        
-        // 加载 JS
-        const script = monitorWindow.document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/gh/williamtroup/JsonTree.js@4.7.1/dist/jsontree.min.js';
-        script.onerror = () => console.error('JsonTree JS 加载失败');
-        script.onload = () => {
-          console.log('JsonTree 加载完成');
-        };
-        monitorWindow.document.body.appendChild(script);
-      } catch (e) {
-        console.error('加载 JsonTree 资源失败:', e);
-      }
-    }, 100);
+
 
     // 等待 DOM 完全加载后再添加事件监听器
     const initEventListeners = () => {
@@ -1294,221 +1273,14 @@
 
       // 创建展开/收缩切换函数
       function createExpandableValue(monitorWindow, value) {
-        // 判断是否为对象
         const isObject = value && typeof value === "object";
-
-        // 获取完整值文本
-        const fullValueText = isObject
-          ? JSON.stringify(value, null, 2)
-          : String(value);
-
-        // 如果是对象，使用 JsonTree 显示
-        if (isObject) {
-          const jsonContainerId = `json-localstorage-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
-          const jsonContainer = monitorWindow.document.createElement("div");
-          jsonContainer.id = jsonContainerId;
-          jsonContainer.style.backgroundColor = "#f8f8f8";
-          jsonContainer.style.padding = "8px";
-          jsonContainer.style.borderRadius = "4px";
-          jsonContainer.style.border = "1px solid #e0e0e0";
-
-          // 初始化 JsonTree
-          const initJsonTreeForLocalStorage = () => {
-            try {
-              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-              if (JsonTreeClass) {
-                new JsonTreeClass(jsonContainer, {
-                  data: value,
-                  title: {
-                    enableFullScreenToggling: false,
-                    showFullScreenButton: false,
-                  },
-                  footer: {},
-                  controlPanel: {
-                    showMovingButtons: false,
-                    showEditButton: false,
-                    showImportButton: false,
-                  },
-                  sideMenu: {
-                    enabled: false,
-                  },
-                });
-              } else {
-                // 如果 JsonTree 还没加载，等待加载完成
-                const checkAndInit = setInterval(() => {
-                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-                  if (JsonTreeClass) {
-                    new JsonTreeClass(jsonContainer, {
-                      data: value,
-                      title: {
-                        enableFullScreenToggling: false,
-                        showFullScreenButton: false,
-                      },
-                      footer: {},
-                      controlPanel: {
-                        showMovingButtons: false,
-                        showEditButton: false,
-                        showImportButton: false,
-                      },
-                      sideMenu: {
-                        enabled: false,
-                      },
-                    });
-                    clearInterval(checkAndInit);
-                  }
-                }, 100);
-                // 10秒后停止检查，回退到普通显示
-                setTimeout(() => {
-                  clearInterval(checkAndInit);
-                  const preElement = monitorWindow.document.createElement("pre");
-                  preElement.textContent = fullValueText;
-                  preElement.style.margin = "0";
-                  preElement.style.whiteSpace = "pre-wrap";
-                  preElement.style.wordBreak = "break-all";
-                  preElement.style.fontFamily = "monospace";
-                  preElement.style.fontSize = "12px";
-                  jsonContainer.innerHTML = "";
-                  jsonContainer.appendChild(preElement);
-                }, 10000);
-              }
-            } catch (e) {
-              console.error("JsonTree 初始化失败:", e);
-              // 如果 JsonTree 失败，回退到普通显示
-              const preElement = monitorWindow.document.createElement("pre");
-              preElement.textContent = fullValueText;
-              preElement.style.margin = "0";
-              preElement.style.whiteSpace = "pre-wrap";
-              preElement.style.wordBreak = "break-all";
-              preElement.style.fontFamily = "monospace";
-              preElement.style.fontSize = "12px";
-              jsonContainer.innerHTML = "";
-              jsonContainer.appendChild(preElement);
-            }
-          };
-
-          // 延迟初始化，确保 JsonTree 已加载
-          setTimeout(initJsonTreeForLocalStorage, 200);
-
-          return jsonContainer;
-        }
-
-        // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
-        if (fullValueText.length <= 50) {
-          const simpleElement = monitorWindow.document.createElement("span");
-          simpleElement.textContent = fullValueText;
-          simpleElement.style.fontFamily = "monospace";
-          simpleElement.style.fontSize = "12px";
-          return simpleElement;
-        }
-
-        const valueContainer = monitorWindow.document.createElement("div");
-
-        // 设置容器样式，使整个区域可点击
-        valueContainer.style.cursor = "pointer";
-        valueContainer.style.userSelect = "text"; // 允许文本选择
-        valueContainer.onmouseenter = function () {
-          this.style.backgroundColor = "#f0f0f0";
-          this.style.borderRadius = "3px";
-        };
-        valueContainer.onmouseleave = function () {
-          this.style.backgroundColor = "";
-        };
-
-        // 创建展开/收缩图标
-        const toggleIcon = monitorWindow.document.createElement("span");
-        toggleIcon.textContent = "▶";
-        toggleIcon.style.marginRight = "5px";
-        toggleIcon.style.display = "inline-block";
-        toggleIcon.style.transition = "transform 0.2s, color 0.2s";
-        toggleIcon.style.color = "#666";
-
-        // 创建简短预览（最多显示80个字符）
-        const previewText =
-          fullValueText.length > 80
-            ? fullValueText.substring(0, 80) + "..."
-            : fullValueText;
-
-        // 创建预览元素
-        const previewElement = monitorWindow.document.createElement("span");
-        previewElement.textContent = previewText;
-        previewElement.style.fontFamily = "monospace";
-        previewElement.style.fontSize = "12px";
-
-        // 创建完整内容元素
-        const fullContentElement = monitorWindow.document.createElement("pre");
-        fullContentElement.textContent = fullValueText;
-        fullContentElement.style.margin = "8px 0 0 15px"; // 缩进效果
-        fullContentElement.style.whiteSpace = "pre-wrap";
-        fullContentElement.style.wordBreak = "break-all";
-        fullContentElement.style.fontFamily = "monospace";
-        fullContentElement.style.fontSize = "12px";
-        fullContentElement.style.display = "none"; // 默认隐藏
-        fullContentElement.style.padding = "8px";
-        fullContentElement.style.backgroundColor = "#f9f9f9";
-        fullContentElement.style.borderRadius = "4px";
-        fullContentElement.style.border = "1px solid #e0e0e0";
-        fullContentElement.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-
-        // 组合元素
-        valueContainer.appendChild(toggleIcon);
-        valueContainer.appendChild(previewElement);
-        valueContainer.appendChild(fullContentElement);
-
-        // 切换函数
-        function toggleExpand() {
-          const isExpanded = fullContentElement.style.display === "block";
-          if (isExpanded) {
-            fullContentElement.style.display = "none";
-            toggleIcon.textContent = "▶";
-            toggleIcon.style.transform = "rotate(0deg)";
-            toggleIcon.style.color = "#666";
-          } else {
-            fullContentElement.style.display = "block";
-            toggleIcon.textContent = "▼";
-            toggleIcon.style.transform = "rotate(180deg)";
-            toggleIcon.style.color = "#2196F3";
-
-            // 自动滚动到显示的完整内容（如果需要）
-            setTimeout(() => {
-              const rect = fullContentElement.getBoundingClientRect();
-              if (rect.bottom > window.innerHeight) {
-                fullContentElement.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            }, 100);
-          }
-        }
-
-        // 为整个容器添加点击事件，但允许文本选择
-        let lastClickTime = 0;
-        valueContainer.addEventListener("click", function (e) {
-          // 检查是否是文本选择操作
-          const selection = monitorWindow.getSelection();
-          const selectedText = selection.toString();
-          if (selectedText) {
-            return; // 如果有选中文本，不执行展开/收缩
-          }
-
-          // 双击也可以展开/收缩
-          const currentTime = Date.now();
-          const isDoubleClick = currentTime - lastClickTime < 300;
-          lastClickTime = currentTime;
-
-          toggleExpand();
-        });
-
-        // 允许直接点击图标切换
-        toggleIcon.addEventListener("click", function (e) {
-          e.stopPropagation(); // 阻止冒泡，避免触发两次
-          toggleExpand();
-        });
-
-        return valueContainer;
+        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
+        const pre = monitorWindow.document.createElement('pre');
+        pre.textContent = fullValueText;
+        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
+        return pre;
       }
+
 
       Object.entries(localStorageData).forEach(([key, value]) => {
         const row = monitorWindow.document.createElement("tr");
@@ -1609,221 +1381,14 @@
 
       // 创建展开/收缩切换函数
       function createExpandableValue(monitorWindow, value) {
-        // 判断是否为对象
         const isObject = value && typeof value === "object";
-
-        // 获取完整值文本
-        const fullValueText = isObject
-          ? JSON.stringify(value, null, 2)
-          : String(value);
-
-        // 如果是对象，使用 JsonTree 显示
-        if (isObject) {
-          const jsonContainerId = `json-sessionstorage-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
-          const jsonContainer = monitorWindow.document.createElement("div");
-          jsonContainer.id = jsonContainerId;
-          jsonContainer.style.backgroundColor = "#f8f8f8";
-          jsonContainer.style.padding = "8px";
-          jsonContainer.style.borderRadius = "4px";
-          jsonContainer.style.border = "1px solid #e0e0e0";
-
-          // 初始化 JsonTree
-          const initJsonTreeForSessionStorage = () => {
-            try {
-              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-              if (JsonTreeClass) {
-                new JsonTreeClass(jsonContainer, {
-                  data: value,
-                  title: {
-                    enableFullScreenToggling: false,
-                    showFullScreenButton: false,
-                  },
-                  footer: {},
-                  controlPanel: {
-                    showMovingButtons: false,
-                    showEditButton: false,
-                    showImportButton: false,
-                  },
-                  sideMenu: {
-                    enabled: false,
-                  },
-                });
-              } else {
-                // 如果 JsonTree 还没加载，等待加载完成
-                const checkAndInit = setInterval(() => {
-                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-                  if (JsonTreeClass) {
-                    new JsonTreeClass(jsonContainer, {
-                      data: value,
-                      title: {
-                        enableFullScreenToggling: false,
-                        showFullScreenButton: false,
-                      },
-                      footer: {},
-                      controlPanel: {
-                        showMovingButtons: false,
-                        showEditButton: false,
-                        showImportButton: false,
-                      },
-                      sideMenu: {
-                        enabled: false,
-                      },
-                    });
-                    clearInterval(checkAndInit);
-                  }
-                }, 100);
-                // 10秒后停止检查，回退到普通显示
-                setTimeout(() => {
-                  clearInterval(checkAndInit);
-                  const preElement = monitorWindow.document.createElement("pre");
-                  preElement.textContent = fullValueText;
-                  preElement.style.margin = "0";
-                  preElement.style.whiteSpace = "pre-wrap";
-                  preElement.style.wordBreak = "break-all";
-                  preElement.style.fontFamily = "monospace";
-                  preElement.style.fontSize = "12px";
-                  jsonContainer.innerHTML = "";
-                  jsonContainer.appendChild(preElement);
-                }, 10000);
-              }
-            } catch (e) {
-              console.error("JsonTree 初始化失败:", e);
-              // 如果 JsonTree 失败，回退到普通显示
-              const preElement = monitorWindow.document.createElement("pre");
-              preElement.textContent = fullValueText;
-              preElement.style.margin = "0";
-              preElement.style.whiteSpace = "pre-wrap";
-              preElement.style.wordBreak = "break-all";
-              preElement.style.fontFamily = "monospace";
-              preElement.style.fontSize = "12px";
-              jsonContainer.innerHTML = "";
-              jsonContainer.appendChild(preElement);
-            }
-          };
-
-          // 延迟初始化，确保 JsonTree 已加载
-          setTimeout(initJsonTreeForSessionStorage, 200);
-
-          return jsonContainer;
-        }
-
-        // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
-        if (fullValueText.length <= 50) {
-          const simpleElement = monitorWindow.document.createElement("span");
-          simpleElement.textContent = fullValueText;
-          simpleElement.style.fontFamily = "monospace";
-          simpleElement.style.fontSize = "12px";
-          return simpleElement;
-        }
-
-        const valueContainer = monitorWindow.document.createElement("div");
-
-        // 设置容器样式，使整个区域可点击
-        valueContainer.style.cursor = "pointer";
-        valueContainer.style.userSelect = "text"; // 允许文本选择
-        valueContainer.onmouseenter = function () {
-          this.style.backgroundColor = "#f0f0f0";
-          this.style.borderRadius = "3px";
-        };
-        valueContainer.onmouseleave = function () {
-          this.style.backgroundColor = "";
-        };
-
-        // 创建展开/收缩图标
-        const toggleIcon = monitorWindow.document.createElement("span");
-        toggleIcon.textContent = "▶";
-        toggleIcon.style.marginRight = "5px";
-        toggleIcon.style.display = "inline-block";
-        toggleIcon.style.transition = "transform 0.2s, color 0.2s";
-        toggleIcon.style.color = "#666";
-
-        // 创建简短预览（最多显示80个字符）
-        const previewText =
-          fullValueText.length > 80
-            ? fullValueText.substring(0, 80) + "..."
-            : fullValueText;
-
-        // 创建预览元素
-        const previewElement = monitorWindow.document.createElement("span");
-        previewElement.textContent = previewText;
-        previewElement.style.fontFamily = "monospace";
-        previewElement.style.fontSize = "12px";
-
-        // 创建完整内容元素
-        const fullContentElement = monitorWindow.document.createElement("pre");
-        fullContentElement.textContent = fullValueText;
-        fullContentElement.style.margin = "8px 0 0 15px"; // 缩进效果
-        fullContentElement.style.whiteSpace = "pre-wrap";
-        fullContentElement.style.wordBreak = "break-all";
-        fullContentElement.style.fontFamily = "monospace";
-        fullContentElement.style.fontSize = "12px";
-        fullContentElement.style.display = "none"; // 默认隐藏
-        fullContentElement.style.padding = "8px";
-        fullContentElement.style.backgroundColor = "#f9f9f9";
-        fullContentElement.style.borderRadius = "4px";
-        fullContentElement.style.border = "1px solid #e0e0e0";
-        fullContentElement.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-
-        // 组合元素
-        valueContainer.appendChild(toggleIcon);
-        valueContainer.appendChild(previewElement);
-        valueContainer.appendChild(fullContentElement);
-
-        // 切换函数
-        function toggleExpand() {
-          const isExpanded = fullContentElement.style.display === "block";
-          if (isExpanded) {
-            fullContentElement.style.display = "none";
-            toggleIcon.textContent = "▶";
-            toggleIcon.style.transform = "rotate(0deg)";
-            toggleIcon.style.color = "#666";
-          } else {
-            fullContentElement.style.display = "block";
-            toggleIcon.textContent = "▼";
-            toggleIcon.style.transform = "rotate(180deg)";
-            toggleIcon.style.color = "#2196F3";
-
-            // 自动滚动到显示的完整内容（如果需要）
-            setTimeout(() => {
-              const rect = fullContentElement.getBoundingClientRect();
-              if (rect.bottom > window.innerHeight) {
-                fullContentElement.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            }, 100);
-          }
-        }
-
-        // 为整个容器添加点击事件，但允许文本选择
-        let lastClickTime = 0;
-        valueContainer.addEventListener("click", function (e) {
-          // 检查是否是文本选择操作
-          const selection = monitorWindow.getSelection();
-          const selectedText = selection.toString();
-          if (selectedText) {
-            return; // 如果有选中文本，不执行展开/收缩
-          }
-
-          // 双击也可以展开/收缩
-          const currentTime = Date.now();
-          const isDoubleClick = currentTime - lastClickTime < 300;
-          lastClickTime = currentTime;
-
-          toggleExpand();
-        });
-
-        // 允许直接点击图标切换
-        toggleIcon.addEventListener("click", function (e) {
-          e.stopPropagation(); // 阻止冒泡，避免触发两次
-          toggleExpand();
-        });
-
-        return valueContainer;
+        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
+        const pre = monitorWindow.document.createElement('pre');
+        pre.textContent = fullValueText;
+        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
+        return pre;
       }
+
 
       Object.entries(sessionStorageData).forEach(([key, value]) => {
         const row = monitorWindow.document.createElement("tr");
@@ -1935,221 +1500,14 @@
 
       // 创建展开/收缩切换函数
       function createExpandableValue(monitorWindow, value) {
-        // 判断是否为对象
         const isObject = value && typeof value === "object";
-
-        // 获取完整值文本
-        const fullValueText = isObject
-          ? JSON.stringify(value, null, 2)
-          : String(value);
-
-        // 如果是对象，使用 JsonTree 显示
-        if (isObject) {
-          const jsonContainerId = `json-cookie-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
-          const jsonContainer = monitorWindow.document.createElement("div");
-          jsonContainer.id = jsonContainerId;
-          jsonContainer.style.backgroundColor = "#f8f8f8";
-          jsonContainer.style.padding = "8px";
-          jsonContainer.style.borderRadius = "4px";
-          jsonContainer.style.border = "1px solid #e0e0e0";
-
-          // 初始化 JsonTree
-          const initJsonTreeForCookie = () => {
-            try {
-              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-              if (JsonTreeClass) {
-                new JsonTreeClass(jsonContainer, {
-                  data: value,
-                  title: {
-                    enableFullScreenToggling: false,
-                    showFullScreenButton: false,
-                  },
-                  footer: {},
-                  controlPanel: {
-                    showMovingButtons: false,
-                    showEditButton: false,
-                    showImportButton: false,
-                  },
-                  sideMenu: {
-                    enabled: false,
-                  },
-                });
-              } else {
-                // 如果 JsonTree 还没加载，等待加载完成
-                const checkAndInit = setInterval(() => {
-                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-                  if (JsonTreeClass) {
-                    new JsonTreeClass(jsonContainer, {
-                      data: value,
-                      title: {
-                        enableFullScreenToggling: false,
-                        showFullScreenButton: false,
-                      },
-                      footer: {},
-                      controlPanel: {
-                        showMovingButtons: false,
-                        showEditButton: false,
-                        showImportButton: false,
-                      },
-                      sideMenu: {
-                        enabled: false,
-                      },
-                    });
-                    clearInterval(checkAndInit);
-                  }
-                }, 100);
-                // 10秒后停止检查，回退到普通显示
-                setTimeout(() => {
-                  clearInterval(checkAndInit);
-                  const preElement = monitorWindow.document.createElement("pre");
-                  preElement.textContent = fullValueText;
-                  preElement.style.margin = "0";
-                  preElement.style.whiteSpace = "pre-wrap";
-                  preElement.style.wordBreak = "break-all";
-                  preElement.style.fontFamily = "monospace";
-                  preElement.style.fontSize = "12px";
-                  jsonContainer.innerHTML = "";
-                  jsonContainer.appendChild(preElement);
-                }, 10000);
-              }
-            } catch (e) {
-              console.error("JsonTree 初始化失败:", e);
-              // 如果 JsonTree 失败，回退到普通显示
-              const preElement = monitorWindow.document.createElement("pre");
-              preElement.textContent = fullValueText;
-              preElement.style.margin = "0";
-              preElement.style.whiteSpace = "pre-wrap";
-              preElement.style.wordBreak = "break-all";
-              preElement.style.fontFamily = "monospace";
-              preElement.style.fontSize = "12px";
-              jsonContainer.innerHTML = "";
-              jsonContainer.appendChild(preElement);
-            }
-          };
-
-          // 延迟初始化，确保 JsonTree 已加载
-          setTimeout(initJsonTreeForCookie, 200);
-
-          return jsonContainer;
-        }
-
-        // 如果内容较短（少于50个字符），直接显示，不提供展开/收缩功能
-        if (fullValueText.length <= 50) {
-          const simpleElement = monitorWindow.document.createElement("span");
-          simpleElement.textContent = fullValueText;
-          simpleElement.style.fontFamily = "monospace";
-          simpleElement.style.fontSize = "12px";
-          return simpleElement;
-        }
-
-        const valueContainer = monitorWindow.document.createElement("div");
-
-        // 设置容器样式，使整个区域可点击
-        valueContainer.style.cursor = "pointer";
-        valueContainer.style.userSelect = "text"; // 允许文本选择
-        valueContainer.onmouseenter = function () {
-          this.style.backgroundColor = "#f0f0f0";
-          this.style.borderRadius = "3px";
-        };
-        valueContainer.onmouseleave = function () {
-          this.style.backgroundColor = "";
-        };
-
-        // 创建展开/收缩图标
-        const toggleIcon = monitorWindow.document.createElement("span");
-        toggleIcon.textContent = "▶";
-        toggleIcon.style.marginRight = "5px";
-        toggleIcon.style.display = "inline-block";
-        toggleIcon.style.transition = "transform 0.2s, color 0.2s";
-        toggleIcon.style.color = "#666";
-
-        // 创建简短预览（最多显示80个字符）
-        const previewText =
-          fullValueText.length > 80
-            ? fullValueText.substring(0, 80) + "..."
-            : fullValueText;
-
-        // 创建预览元素
-        const previewElement = monitorWindow.document.createElement("span");
-        previewElement.textContent = previewText;
-        previewElement.style.fontFamily = "monospace";
-        previewElement.style.fontSize = "12px";
-
-        // 创建完整内容元素
-        const fullContentElement = monitorWindow.document.createElement("pre");
-        fullContentElement.textContent = fullValueText;
-        fullContentElement.style.margin = "8px 0 0 15px"; // 缩进效果
-        fullContentElement.style.whiteSpace = "pre-wrap";
-        fullContentElement.style.wordBreak = "break-all";
-        fullContentElement.style.fontFamily = "monospace";
-        fullContentElement.style.fontSize = "12px";
-        fullContentElement.style.display = "none"; // 默认隐藏
-        fullContentElement.style.padding = "8px";
-        fullContentElement.style.backgroundColor = "#f9f9f9";
-        fullContentElement.style.borderRadius = "4px";
-        fullContentElement.style.border = "1px solid #e0e0e0";
-        fullContentElement.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
-
-        // 组合元素
-        valueContainer.appendChild(toggleIcon);
-        valueContainer.appendChild(previewElement);
-        valueContainer.appendChild(fullContentElement);
-
-        // 切换函数
-        function toggleExpand() {
-          const isExpanded = fullContentElement.style.display === "block";
-          if (isExpanded) {
-            fullContentElement.style.display = "none";
-            toggleIcon.textContent = "▶";
-            toggleIcon.style.transform = "rotate(0deg)";
-            toggleIcon.style.color = "#666";
-          } else {
-            fullContentElement.style.display = "block";
-            toggleIcon.textContent = "▼";
-            toggleIcon.style.transform = "rotate(180deg)";
-            toggleIcon.style.color = "#2196F3";
-
-            // 自动滚动到显示的完整内容（如果需要）
-            setTimeout(() => {
-              const rect = fullContentElement.getBoundingClientRect();
-              if (rect.bottom > window.innerHeight) {
-                fullContentElement.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            }, 100);
-          }
-        }
-
-        // 为整个容器添加点击事件，但允许文本选择
-        let lastClickTime = 0;
-        valueContainer.addEventListener("click", function (e) {
-          // 检查是否是文本选择操作
-          const selection = monitorWindow.getSelection();
-          const selectedText = selection.toString();
-          if (selectedText) {
-            return; // 如果有选中文本，不执行展开/收缩
-          }
-
-          // 双击也可以展开/收缩
-          const currentTime = Date.now();
-          const isDoubleClick = currentTime - lastClickTime < 300;
-          lastClickTime = currentTime;
-
-          toggleExpand();
-        });
-
-        // 允许直接点击图标切换
-        toggleIcon.addEventListener("click", function (e) {
-          e.stopPropagation(); // 阻止冒泡，避免触发两次
-          toggleExpand();
-        });
-
-        return valueContainer;
+        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
+        const pre = monitorWindow.document.createElement('pre');
+        pre.textContent = fullValueText;
+        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
+        return pre;
       }
+
 
       Object.entries(cookieData).forEach(([key, value]) => {
         const row = monitorWindow.document.createElement("tr");
@@ -2739,6 +2097,11 @@
     // 递归查找 base64 字符串
     function findBase64(obj, path = "") {
       if (typeof obj === "string") {
+        // 检查路径是否包含encData字段
+        if (path.includes(".encData") || path === "encData") {
+          return;
+        }
+        
         let base64Data = null;
         let mimeType = "application/octet-stream";
         let fileType = "bin";
@@ -3015,18 +2378,10 @@
       .toString(36)
       .substr(2, 9)}`;
 
-    if (isRequestHeadersObject) {
-      requestHeadersSection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">请求头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${requestHeadersContentId}').textContent)">📄</button>
-            <div id="${requestHeadersContainerId}"></div>
-            <pre id="${requestHeadersContentId}" style="display: none;">${requestHeadersContent}</pre>
-        `;
-    } else {
       requestHeadersSection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${requestHeadersContent}</pre>
         `;
-    }
 
     // 请求体（处理 base64 替换）
     const requestBodySection = monitorWindow.document.createElement("div");
@@ -3089,18 +2444,10 @@
     const requestBodyContentId = `json-content-request-body-${Date.now()}-${Math.random()
       .toString(36)
       .substr(2, 9)}`;
-    if (isRequestBodyJsonObject) {
-      requestBodySection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${requestBodyContentId}').textContent)">📄</button>
-            <div id="${requestBodyContainerId}"></div>
-            <pre id="${requestBodyContentId}" style="display: none;">${requestBodyContent}</pre>
-        `;
-    } else {
       requestBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${requestBodyContent}</pre>
         `;
-    }
 
     // 响应头
     const responseHeadersSection = monitorWindow.document.createElement("div");
@@ -3117,18 +2464,10 @@
       .toString(36)
       .substr(2, 9)}`;
 
-    if (isResponseHeadersObject) {
-      responseHeadersSection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">响应头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${responseHeadersContentId}').textContent)">📄</button>
-            <div id="${responseHeadersContainerId}"></div>
-            <pre id="${responseHeadersContentId}" style="display: none;">${responseHeadersContent}</pre>
-        `;
-    } else {
       responseHeadersSection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${responseHeadersContent}</pre>
         `;
-    }
 
     // 响应体（处理 base64 替换）
     const responseBodySection = monitorWindow.document.createElement("div");
@@ -3145,8 +2484,13 @@
     }
 
     // 递归替换 base64 字符串（复用请求体的函数）
-    function replaceBase64InObject(obj) {
+    function replaceBase64InObject(obj, path = "") {
       if (typeof obj === "string") {
+        // 检查路径是否包含encData字段
+        if (path.includes(".encData") || path === "encData") {
+          return obj;
+        }
+        
         // 检测 Data URL 或长 base64
         if (
           obj.startsWith("data:") ||
@@ -3159,12 +2503,13 @@
         }
         return obj;
       } else if (Array.isArray(obj)) {
-        return obj.map((item) => replaceBase64InObject(item));
+        return obj.map((item) => replaceBase64InObject(item, path));
       } else if (typeof obj === "object" && obj !== null) {
         const newObj = {};
         for (const key in obj) {
           if (obj.hasOwnProperty(key)) {
-            newObj[key] = replaceBase64InObject(obj[key]);
+            const newPath = path ? `${path}.${key}` : key;
+            newObj[key] = replaceBase64InObject(obj[key], newPath);
           }
         }
         return newObj;
@@ -3188,18 +2533,10 @@
     const jsonContentId = `json-content-${Date.now()}-${Math.random()
       .toString(36)
       .substr(2, 9)}`;
-    if (isJsonObject) {
-      responseBodySection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(document.getElementById('${jsonContentId}').textContent)">📄</button>
-            <div id="${jsonContainerId}"></div>
-            <pre id="${jsonContentId}" style="display: none;">${responseBodyContent}</pre>
-        `;
-    } else {
       responseBodySection.innerHTML = `
             <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
             <pre>${responseBodyContent}</pre>
         `;
-    }
 
     // 清空详情面板并添加新内容
     // 保留关闭按钮和回到顶部按钮
@@ -3240,132 +2577,9 @@
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
 
-    // 辅助函数：初始化 JsonTree
-    const initJsonTree = (containerId, jsonData, fallbackContent) => {
-      try {
-        const jsonContainer =
-          monitorWindow.document.getElementById(containerId);
-        if (jsonContainer) {
-          // 为容器添加背景样式
-          jsonContainer.style.backgroundColor = "#f8f8f8";
-          jsonContainer.style.padding = "8px";
-          jsonContainer.style.borderRadius = "4px";
-          jsonContainer.style.border = "1px solid #e0e0e0";
 
-          // 初始化 JsonTree - 在 monitorWindow 的上下文中执行
-          const initTree = () => {
-            try {
-              // 在 monitorWindow 的全局作用域中访问 JsonTree
-              const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-              if (JsonTreeClass) {
-                new JsonTreeClass(jsonContainer, {
-                  data: jsonData,
-                  title: {
-                    enableFullScreenToggling: false,
-                    showFullScreenButton: false,
-                  },
-                  footer: {},
-                  controlPanel: {
-                    showMovingButtons: false,
-                    showEditButton: false,
-                    showImportButton: false,
-                  },
-                  sideMenu: {
-                    enabled: false,
-                  },
-                });
-              } else {
-                // 如果 JsonTree 还没加载，等待加载完成
-                const checkAndInit = setInterval(() => {
-                  const JsonTreeClass = monitorWindow.JsonTree || (monitorWindow.window && monitorWindow.window.JsonTree);
-                  if (JsonTreeClass) {
-                    const container =
-                      monitorWindow.document.getElementById(containerId);
-                    if (container) {
-                      new JsonTreeClass(container, {
-                        data: jsonData,
-                        title: {
-                          enableFullScreenToggling: false,
-                          showFullScreenButton: false,
-                        },
-                        footer: {},
-                        controlPanel: {
-                          showMovingButtons: false,
-                          showEditButton: false,
-                          showImportButton: false,
-                        },
-                        sideMenu: {
-                          enabled: false,
-                        },
-                      });
-                      clearInterval(checkAndInit);
-                    }
-                  }
-                }, 100);
-                // 10秒后停止检查，回退到普通显示
-                setTimeout(() => {
-                  clearInterval(checkAndInit);
-                  // 如果 JsonTree 仍未加载，回退到普通显示
-                  const container = monitorWindow.document.getElementById(containerId);
-                  if (container && fallbackContent) {
-                    container.innerHTML = `<pre>${fallbackContent}</pre>`;
-                  }
-                }, 10000);
-              }
-            } catch (e) {
-              console.error("JsonTree 初始化错误:", e);
-              // 出错时回退到普通显示
-              if (fallbackContent) {
-                jsonContainer.innerHTML = `<pre>${fallbackContent}</pre>`;
-              }
-            }
-          };
 
-          // 延迟初始化，确保 JsonTree 已加载
-          setTimeout(initTree, 200);
-        }
-      } catch (e) {
-        console.error("JsonTree 初始化失败:", e);
-        // 如果 JsonTree 失败，回退到普通显示
-        const jsonContainer =
-          monitorWindow.document.getElementById(containerId);
-        if (jsonContainer && fallbackContent) {
-          jsonContainer.innerHTML = `<pre>${fallbackContent}</pre>`;
-        }
-      }
-    };
 
-    // 初始化请求头的 JsonTree
-    if (isRequestHeadersObject && requestHeadersData) {
-      initJsonTree(
-        requestHeadersContainerId,
-        requestHeadersData,
-        requestHeadersContent
-      );
-    }
-
-    // 初始化请求体的 JsonTree
-    if (isRequestBodyJsonObject && requestBodyJsonData) {
-      initJsonTree(
-        requestBodyContainerId,
-        requestBodyJsonData,
-        requestBodyContent
-      );
-    }
-
-    // 初始化响应头的 JsonTree
-    if (isResponseHeadersObject && responseHeadersData) {
-      initJsonTree(
-        responseHeadersContainerId,
-        responseHeadersData,
-        responseHeadersContent
-      );
-    }
-
-    // 初始化响应体的 JsonTree
-    if (isJsonObject && jsonDataForView) {
-      initJsonTree(jsonContainerId, jsonDataForView, responseBodyContent);
-    }
 
     // 检测并添加响应体的 base64 下载按钮
     try {
