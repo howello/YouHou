@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        跳板机登录
 // @namespace   http://howe.com
-// @version     5.2
+// @version     5.3
 // @author      howe
 // @description 不使用弹窗，页面加载后显示悬浮按钮，点击显示登录项列表，支持在页面内添加/编辑登录项并保存（GM storage）。
 // @include     *://24.*
@@ -164,7 +164,7 @@
       .yhj-fab svg {width: 24px; height: 24px;}
       .yhj-fab:hover {background:#106ebe}
       .yhj-fab.dragging {opacity:0.8;cursor:grabbing}
-      .yhj-panel {position: fixed; display: block; width:320px; max-height:500px; overflow:auto; z-index:999998; background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family: Arial, Helvetica, sans-serif}
+      .yhj-panel {position: fixed; display: block; width:650px; max-height:500px; overflow:auto; z-index:999998; background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family: Arial, Helvetica, sans-serif}
       .yhj-panel.left-side {right: 86px; bottom: 20px}
       .yhj-panel h4{margin:0 0 8px 0;font-size:14px;display:flex;justify-content:space-between;align-items:center}
       .yhj-panel h4 .close{cursor:pointer;opacity:0.6;font-size:18px}
@@ -237,7 +237,7 @@
             if (text.includes(item.ip)) {
               util.clog("找到了，点击打开弹窗");
               const btnCell = row.querySelector(
-                ".is-left:nth-child(6) > div > div > div"
+                ".is-left:nth-child(6) > div > div > div",
               );
               if (btnCell) {
                 btnCell.click();
@@ -246,7 +246,7 @@
                 // 调用输入用户名密码的方法
                 setTimeout(
                   () => this.inputDialogPass(item.username, item.password),
-                  500
+                  500,
                 );
                 // 找到后直接退出循环
                 break;
@@ -302,10 +302,10 @@
           util.clog("点击登录");
           // 查找确定按钮
           const submitBtns = Array.from(
-            document.querySelectorAll('.footer [type="button"]')
+            document.querySelectorAll('.footer [type="button"]'),
           );
           const submitBtn = submitBtns.find((btn) =>
-            btn.textContent.includes("确定")
+            btn.textContent.includes("确定"),
           );
           if (submitBtn) {
             submitBtn.click();
@@ -332,10 +332,9 @@
 
       util.startLog();
       util.clog("开始登录Console");
-
       // 检查是否在子账户登录页面
       let title = document.querySelector(".loginTypeNoSelected");
-      if (title && title.textContent.trim().includes("帐户登录")) {
+      if (title && title.textContent.trim().includes("账户登录")) {
         util.clog("切换到子用户登录");
         const subUserLoginBtn = document.querySelector("#subUserLogin");
         if (subUserLoginBtn) {
@@ -458,12 +457,12 @@
     let userEl = null;
     if (formEl) {
       userEl = formEl.querySelector(
-        "input[type=text], input[type=email], input:not([type])"
+        "input[type=text], input[type=email], input:not([type])",
       );
     }
     if (!userEl) {
       userEl = document.querySelector(
-        "input[type=text], input[type=email], input:not([type])"
+        "input[type=text], input[type=email], input:not([type])",
       );
     }
 
@@ -488,14 +487,14 @@
 
     if (formEl) {
       loginBtn = Array.from(
-        formEl.querySelectorAll("button,input[type=button],input[type=submit]")
+        formEl.querySelectorAll("button,input[type=button],input[type=submit]"),
       ).find(btnMatch);
     }
     if (!loginBtn) {
       loginBtn = Array.from(
         document.querySelectorAll(
-          "button,input[type=button],input[type=submit]"
-        )
+          "button,input[type=button],input[type=submit]",
+        ),
       ).find(btnMatch);
     }
 
@@ -558,53 +557,82 @@
     };
     panel.appendChild(infoDiv);
 
-    const list = document.createElement("div");
+    // 创建横向容器
+    const container = document.createElement("div");
+    container.style.display = "flex";
+    container.style.gap = "10px";
+    container.style.width = "100%";
+
+    // 定义类型配置
+    const types = [
+      { key: "console", name: "Console" },
+      { key: "windows", name: "跳板机" },
+      { key: "baolei", name: "堡垒机" },
+    ];
+
     const items = loadItems();
-    if (items.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = "暂无登录项，请通过设置添加。";
-      empty.style.color = "#666";
-      empty.style.padding = "6px 0";
-      list.appendChild(empty);
-    } else {
-      items.forEach((it) => {
-        const type = it.type || "windows"; // 默认为windows类型
-        const typeName =
-          {
-            baolei: "堡垒机",
-            windows: "跳板机",
-            console: "Console",
-          }[type] || "未知";
 
-        const row = document.createElement("div");
-        row.className = "yhj-item";
-        row.innerHTML = `
-          <div class="name">${escapeHtml(
-            it.name || "未命名"
-          )} <small style="color:#999">[${typeName}]</small></div>
-          <div class="username">${escapeHtml(it.username || "")}</div>
-        `;
+    types.forEach((typeConfig) => {
+      // 创建类型列表容器
+      const typeContainer = document.createElement("div");
+      typeContainer.style.flex = "1";
+      typeContainer.style.minWidth = "0";
 
-        row.onclick = () => {
-          switch (type) {
-            case "baolei":
-              login.loginBaoLei(it);
-              break;
-            case "windows":
-              login.loginWindows(it);
-              break;
-            case "console":
-              login.loginConsole(it);
-              break;
-            default:
-              util.showMsg("未知的登录类型");
-          }
-          panel.style.display = "none"; // 点击后隐藏面板
-        };
-        list.appendChild(row);
-      });
-    }
-    panel.appendChild(list);
+      // 添加类型标题
+      const typeTitle = document.createElement("div");
+      typeTitle.textContent = typeConfig.name;
+      typeTitle.style.fontWeight = "bold";
+      typeTitle.style.fontSize = "14px";
+      typeTitle.style.marginBottom = "8px";
+      typeTitle.style.paddingBottom = "4px";
+      typeTitle.style.borderBottom = "1px solid #f0f0f0";
+      typeContainer.appendChild(typeTitle);
+
+      // 筛选当前类型的项目
+      const typeItems = items.filter(
+        (it) => (it.type || "windows") === typeConfig.key,
+      );
+
+      if (typeItems.length === 0) {
+        const empty = document.createElement("div");
+        empty.textContent = "暂无登录项";
+        empty.style.color = "#999";
+        empty.style.fontSize = "12px";
+        empty.style.padding = "4px 0";
+        typeContainer.appendChild(empty);
+      } else {
+        typeItems.forEach((it) => {
+          const row = document.createElement("div");
+          row.className = "yhj-item";
+          row.innerHTML = `
+            <div class="name">${escapeHtml(it.name || "未命名")}</div>
+            <div class="username">${escapeHtml(it.username || "")}</div>
+          `;
+
+          row.onclick = () => {
+            switch (typeConfig.key) {
+              case "baolei":
+                login.loginBaoLei(it);
+                break;
+              case "windows":
+                login.loginWindows(it);
+                break;
+              case "console":
+                login.loginConsole(it);
+                break;
+              default:
+                util.showMsg("未知的登录类型");
+            }
+            panel.style.display = "none"; // 点击后隐藏面板
+          };
+          typeContainer.appendChild(row);
+        });
+      }
+
+      container.appendChild(typeContainer);
+    });
+
+    panel.appendChild(container);
     panel.style.display = "none"; // 默认隐藏
   }
 
@@ -637,7 +665,7 @@
           <button data-action="delete" data-idx="${idx}">删除</button>
         </td>
       </tr>
-    `
+    `,
       )
       .join("");
 
@@ -1086,7 +1114,7 @@
         <td>accessToken</td>
         <td>访问令牌(解密)</td>
         <td style="word-break:break-all">${escapeHtml(
-          util.decrypt(accessToken, true)
+          util.decrypt(accessToken, true),
         )}</td>
       </tr>`);
     }
@@ -1243,8 +1271,8 @@
             type === "windows"
               ? escapeHtml(item.ip || "")
               : type === "console"
-              ? escapeHtml(item.email || "")
-              : "-"
+                ? escapeHtml(item.email || "")
+                : "-"
           }</td>
           <td>
             <button data-action="edit" data-idx="${idx}" class="yhj-btn">编辑</button>
