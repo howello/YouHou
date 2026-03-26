@@ -164,7 +164,7 @@
       .yhj-fab svg {width: 24px; height: 24px;}
       .yhj-fab:hover {background:#106ebe}
       .yhj-fab.dragging {opacity:0.8;cursor:grabbing}
-      .yhj-panel {position: fixed; display: block; width:650px; max-height:500px; overflow:auto; z-index:999998; background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family: Arial, Helvetica, sans-serif}
+      .yhj-panel {position: fixed; display: block; width:700px; max-height:800px;font-size:12px; overflow:auto; z-index:999998; background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family: Arial, Helvetica, sans-serif}
       .yhj-panel.left-side {right: 86px; bottom: 20px}
       .yhj-panel h4{margin:0 0 8px 0;font-size:14px;display:flex;justify-content:space-between;align-items:center}
       .yhj-panel h4 .close{cursor:pointer;opacity:0.6;font-size:18px}
@@ -577,6 +577,9 @@
       const typeContainer = document.createElement("div");
       typeContainer.style.flex = "1";
       typeContainer.style.minWidth = "0";
+      typeContainer.style.border = "1px solid #ddd";
+      typeContainer.style.borderRadius = "4px";
+      typeContainer.style.padding = "8px";
 
       // 添加类型标题
       const typeTitle = document.createElement("div");
@@ -1135,7 +1138,7 @@
     }
     const html = `
       <style>
-        .yhj-table { width: 100%; border-collapse: collapse; }
+        .yhj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .yhj-table th, .yhj-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
         .yhj-table tr:hover { background-color: #f8f8f8; }
         .yhj-table th { background: #f5f5f5; font-weight: bold; }
@@ -1170,6 +1173,13 @@
       .yhj-wide-dialog {
         width: 80vw !important;
         margin-left: 10vw !important;
+      }
+      .yhj-wide-dialog, .yhj-wide-dialog * {
+        font-size: 12px !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+      }
+      .yhj-wide-dialog .swal2-title {
+        font-size: 16px !important;
       }
       /* 适配不同屏幕尺寸 */
       @media screen and (max-width: 768px) {
@@ -1290,7 +1300,7 @@
         .yhj-form-row:last-child { margin-bottom: 0; }
         .yhj-form select, .yhj-form input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; width: 150px; }
         .yhj-form input[type="password"] { font-family: monospace; }
-        .yhj-table { width: 100%; border-collapse: collapse; }
+        .yhj-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .yhj-table th, .yhj-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
         .yhj-table th { background: #f5f5f5; }
         .yhj-btn { padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; background: #fff; cursor: pointer; }
