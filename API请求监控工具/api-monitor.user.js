@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.2
+// @version      2.8.3
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -347,65 +347,108 @@
     HseEncAndDecUtil.plafPubKey = c.plafPubKey || "";
   }
 
-  function openDecryptConfigDialog() {
-    const existing = document.getElementById("api-monitor-decrypt-config-overlay");
+  function openSettingsDialog() {
+    const existing = document.getElementById("api-monitor-settings-overlay");
     if (existing) existing.remove();
 
     const cfg = getDecryptConfig();
+    const keywords = getMonitorKeywords();
     const overlay = document.createElement("div");
-    overlay.id = "api-monitor-decrypt-config-overlay";
+    overlay.id = "api-monitor-settings-overlay";
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;";
 
     const panel = document.createElement("div");
     panel.style.cssText =
-      "width:min(420px,92vw);background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:18px 20px;";
+      "width:min(460px,92vw);background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:18px 20px;";
 
     const title = document.createElement("h3");
-    title.textContent = "配置解密参数";
-    title.style.cssText = "margin:0 0 8px;font-size:16px;color:#222;";
+    title.textContent = "设置";
+    title.style.cssText = "margin:0 0 14px;font-size:16px;color:#222;";
     panel.appendChild(title);
 
-    const hint = document.createElement("div");
-    hint.textContent = "用于解密请求/响应体中的 encData，参数保存在本地。";
-    hint.style.cssText = "color:#666;font-size:12px;margin-bottom:14px;line-height:1.5;";
-    panel.appendChild(hint);
+    const fieldStyle =
+      "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;font-family:ui-monospace,Consolas,monospace;outline:none;";
+    const labelStyle =
+      "display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:5px;";
+    const sectionTitleStyle =
+      "margin:0 0 8px;font-size:13px;font-weight:600;color:#1565c0;padding-bottom:6px;border-bottom:1px solid #eef2f7;";
+    const hintStyle = "color:#666;font-size:12px;margin:0 0 10px;line-height:1.5;";
 
-    // 仅展示解密必需字段
+    function bindFocus(el) {
+      el.addEventListener("focus", () => {
+        el.style.borderColor = "#2196F3";
+        el.style.boxShadow = "0 0 0 3px rgba(33,150,243,0.15)";
+      });
+      el.addEventListener("blur", () => {
+        el.style.borderColor = "#d0d5dd";
+        el.style.boxShadow = "none";
+      });
+    }
+
+    // —— 监控 URL 关键字 ——
+    const kwSection = document.createElement("div");
+    kwSection.style.cssText = "margin-bottom:16px;";
+    const kwTitle = document.createElement("div");
+    kwTitle.textContent = "监控 URL 关键字";
+    kwTitle.style.cssText = sectionTitleStyle;
+    kwSection.appendChild(kwTitle);
+    const kwHint = document.createElement("div");
+    kwHint.textContent = "多个关键字用英文逗号分隔，URL 包含任一关键字时才会被监控。";
+    kwHint.style.cssText = hintStyle;
+    kwSection.appendChild(kwHint);
+    const kwLab = document.createElement("label");
+    kwLab.textContent = "关键字";
+    kwLab.style.cssText = labelStyle;
+    const keywordsInput = document.createElement("input");
+    keywordsInput.type = "text";
+    keywordsInput.placeholder = "例如：has-pss-cw-local, hsa-pss-pw";
+    keywordsInput.value = keywords.join(", ");
+    keywordsInput.spellcheck = false;
+    keywordsInput.autocomplete = "off";
+    keywordsInput.style.cssText = fieldStyle;
+    bindFocus(keywordsInput);
+    kwSection.appendChild(kwLab);
+    kwSection.appendChild(keywordsInput);
+    panel.appendChild(kwSection);
+
+    // —— 解密参数 ——
+    const decSection = document.createElement("div");
+    decSection.style.cssText = "margin-bottom:4px;";
+    const decTitle = document.createElement("div");
+    decTitle.textContent = "解密参数";
+    decTitle.style.cssText = sectionTitleStyle;
+    decSection.appendChild(decTitle);
+    const decHint = document.createElement("div");
+    decHint.textContent = "用于解密请求/响应体中的 encData，参数保存在本地。";
+    decHint.style.cssText = hintStyle;
+    decSection.appendChild(decHint);
+
     const fields = [
-      { key: "chnlId", label: "CHNL_ID", type: "text", placeholder: "渠道 ID" },
-      { key: "sm4Key", label: "SM4_KEY", type: "text", placeholder: "SM4 密钥" },
+      { key: "chnlId", label: "CHNL_ID", placeholder: "渠道 ID" },
+      { key: "sm4Key", label: "SM4_KEY", placeholder: "SM4 密钥" },
     ];
-
     const inputs = {};
     fields.forEach((f) => {
       const row = document.createElement("div");
       row.style.cssText = "margin-bottom:12px;";
       const lab = document.createElement("label");
       lab.textContent = f.label;
-      lab.style.cssText =
-        "display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:5px;";
+      lab.style.cssText = labelStyle;
       const input = document.createElement("input");
-      input.type = f.type;
+      input.type = "text";
       input.placeholder = f.placeholder || "";
       input.value = cfg[f.key] != null ? String(cfg[f.key]) : "";
       input.spellcheck = false;
       input.autocomplete = "off";
-      input.style.cssText =
-        "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;font-family:ui-monospace,Consolas,monospace;outline:none;";
-      input.addEventListener("focus", () => {
-        input.style.borderColor = "#2196F3";
-        input.style.boxShadow = "0 0 0 3px rgba(33,150,243,0.15)";
-      });
-      input.addEventListener("blur", () => {
-        input.style.borderColor = "#d0d5dd";
-        input.style.boxShadow = "none";
-      });
+      input.style.cssText = fieldStyle;
+      bindFocus(input);
       row.appendChild(lab);
       row.appendChild(input);
-      panel.appendChild(row);
+      decSection.appendChild(row);
       inputs[f.key] = input;
     });
+    panel.appendChild(decSection);
 
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:16px;";
@@ -423,17 +466,35 @@
     saveBtn.style.cssText =
       "padding:7px 16px;border:none;border-radius:6px;background:#2196F3;color:#fff;cursor:pointer;font-size:13px;";
     saveBtn.onclick = () => {
-      const chnlId = inputs.chnlId.value.trim();
-      const sm4Key = inputs.sm4Key.value.trim();
-      if (!chnlId || !sm4Key) {
-        alert("请填写 CHNL_ID 与 SM4_KEY");
+      const newKeywords = keywordsInput.value
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
+      if (newKeywords.length === 0) {
+        alert("请至少输入一个监控 URL 关键字");
+        keywordsInput.focus();
         return;
       }
-      // 合并已有配置，避免清空历史字段
-      const next = Object.assign({}, getDecryptConfig(), { chnlId: chnlId, sm4Key: sm4Key });
+
+      const chnlId = inputs.chnlId.value.trim();
+      const sm4Key = inputs.sm4Key.value.trim();
+      // 解密参数允许留空（未启用解密时）；若填了一个必须两个都填
+      if ((chnlId && !sm4Key) || (!chnlId && sm4Key)) {
+        alert("CHNL_ID 与 SM4_KEY 需同时填写，或同时留空");
+        return;
+      }
+
+      GM_setValue("apiMonitorKeywords", newKeywords.join(","));
+      monitorKeywords = newKeywords;
+
+      const next = Object.assign({}, getDecryptConfig(), {
+        chnlId: chnlId,
+        sm4Key: sm4Key,
+      });
       saveDecryptConfig(next);
+
       overlay.remove();
-      alert("解密参数已保存");
+      alert("设置已保存");
     };
 
     actions.appendChild(cancelBtn);
@@ -2130,50 +2191,12 @@
   }
 
   // 初始化用户脚本菜单
-  // 配置监控关键字
-  function configureMonitorKeywords() {
-    const keywords = getMonitorKeywords();
-    const currentKeywords = keywords.join(", ");
-    const input = prompt(
-      `请输入要监控的URL关键字（多个关键字用逗号分隔）：
-
-当前监控的关键字：${currentKeywords}
-
-例如：has-pss-cw-local, hsa-pss-pw`,
-      currentKeywords
-    );
-
-    if (input !== null) {
-      // 清理输入，移除多余空格并分割为数组
-      const newKeywords = input
-        .split(",")
-        .map((keyword) => keyword.trim())
-        .filter((keyword) => keyword.length > 0);
-
-      if (newKeywords.length > 0) {
-        GM_setValue("apiMonitorKeywords", newKeywords.join(","));
-        monitorKeywords = newKeywords;
-        alert(`已更新监控关键字：${newKeywords.join(", ")}`);
-      } else {
-        alert("请至少输入一个有效的监控关键字");
-      }
-    }
-  }
-
   function initializeMenu() {
-    // 注册菜单项
     GM_registerMenuCommand("切换API监控", function () {
       toggleMonitoring();
     });
-
-    // 注册配置监控关键字的菜单项
-    GM_registerMenuCommand("配置监控URL关键字", function () {
-      configureMonitorKeywords();
-    });
-
-    // 配置国密解密参数（与关键字配置并列）
-    GM_registerMenuCommand("配置解密参数", function () {
-      openDecryptConfigDialog();
+    GM_registerMenuCommand("设置", function () {
+      openSettingsDialog();
     });
   }
 
@@ -2985,7 +3008,7 @@
         try {
           applyDecryptConfig(getDecryptConfig());
           if (!HseEncAndDecUtil.CHNL_ID || !HseEncAndDecUtil.SM4_KEY) {
-            alert("请先通过油猴菜单「配置解密参数」填写 CHNL_ID 与 SM4_KEY");
+            alert("请先通过油猴菜单「设置」填写 CHNL_ID 与 SM4_KEY");
             return;
           }
           const decrypted = HseEncAndDecUtil.decryptResponseMsg(
