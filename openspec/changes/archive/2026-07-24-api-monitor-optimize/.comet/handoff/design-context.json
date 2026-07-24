@@ -1,0 +1,17 @@
+{
+  "change": "api-monitor-optimize",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "3647e4c4169692bbeec2c353ce70f513d67ba4982b09e1ce3ceb52024e440627",
+  "files": [
+    { "path": "openspec/changes/api-monitor-optimize/proposal.md", "sha256": "cbf1938e40929aab4a6135b6b92a50ac86f538c53f9d20f55a91e0daa23dc0bc" },
+    { "path": "openspec/changes/api-monitor-optimize/design.md", "sha256": "81fce95f9d51679021348beefd1e1e4d4de5640a5ee662aa89b812cf12162b41" },
+    { "path": "openspec/changes/api-monitor-optimize/tasks.md", "sha256": "58cc2c5fe83942c962a37cfc92cce751a41dd441d89cfeae27f9a32a7dd34de6" },
+    { "path": "openspec/changes/api-monitor-optimize/specs/api-monitor-correctness/spec.md", "sha256": "95b4cb90111ec4ebc694d210277d4762af41f3755e3d6660ff1e1e87b11931a7" },
+    { "path": "openspec/changes/api-monitor-optimize/specs/api-monitor-maintainability/spec.md", "sha256": "ee13d072b8e67bc7c2276090546671d64f3761384c45b13cba4628864143211d" },
+    { "path": "openspec/changes/api-monitor-optimize/specs/api-monitor-performance/spec.md", "sha256": "4019c5f51e79adfa2e5bdc856467a10a0f6506b041c8784ebdc18b07f33bdf4b" },
+    { "path": "openspec/changes/api-monitor-optimize/specs/api-monitor-security/spec.md", "sha256": "98e0f7b6eea987be7e75e503ec86bfaa9b3652dbf8dbc2eedf0dbb50500662bc" }
+  ]
+}

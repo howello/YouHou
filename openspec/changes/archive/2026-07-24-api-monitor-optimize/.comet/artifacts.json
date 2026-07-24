@@ -1,0 +1,9 @@
+{
+  "openspec_proposal": "openspec/changes/api-monitor-optimize/proposal.md",
+  "openspec_design": "openspec/changes/api-monitor-optimize/design.md",
+  "openspec_tasks": "openspec/changes/api-monitor-optimize/tasks.md",
+  "openspec_delta_spec": "openspec/changes/api-monitor-optimize/specs/api-monitor-correctness/spec.md",
+  "handoff_context": "openspec/changes/api-monitor-optimize/.comet/handoff/design-context.json",
+  "handoff_markdown": "openspec/changes/api-monitor-optimize/.comet/handoff/design-context.md",
+  "archive_directory": "openspec/changes/archive/2026-07-24-api-monitor-optimize"
+}

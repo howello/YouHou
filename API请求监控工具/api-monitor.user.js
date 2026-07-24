@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.6
+// @version      2.7
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -14,8 +14,8 @@
 // @noframes
 // @icon         https://ybj.shanxi.gov.cn/ybfw/hallEnter/favicon.ico
 // @license      GPL-3.0-only
-// @downloadURL  https://howe-file.oss-cn-hangzhou.aliyuncs.com/API%E8%AF%B7%E6%B1%82%E7%9B%91%E6%8E%A7%E5%B7%A5%E5%85%B7/api-monitor.user.js
-// @updateURL    https://howe-file.oss-cn-hangzhou.aliyuncs.com/API%E8%AF%B7%E6%B1%82%E7%9B%91%E6%8E%A7%E5%B7%A5%E5%85%B7/api-monitor.meta.js
+// @downloadURL  https://raw.githubusercontent.com/howello/YouHou/master/API%E8%AF%B7%E6%B1%82%E7%9B%91%E6%8E%A7%E5%B7%A5%E5%85%B7/api-monitor.user.js
+// @updateURL    https://raw.githubusercontent.com/howello/YouHou/master/API%E8%AF%B7%E6%B1%82%E7%9B%91%E6%8E%A7%E5%B7%A5%E5%85%B7/api-monitor.meta.js
 // ==/UserScript==
 
 (function () {
@@ -25,6 +25,18 @@
   let requestHistory = [];
   // 历史记录最大保存数量
   const MAX_HISTORY_SIZE = 100;
+  // 列表/控制台 DOM 显示上限（内存历史另计）
+  const REQUEST_LIST_VIEW_MAX = 50;
+  const CONSOLE_VIEW_MAX = 200;
+  const CONSOLE_MEM_MAX = 500;
+  // 历史落盘 debounce 与大 body 截断（仅磁盘；内存保留完整 body）
+  const HISTORY_PERSIST_DEBOUNCE_MS = 800;
+  const BODY_PERSIST_MAX_CHARS = 51200;
+  // Base64 DFS 扫描上限
+  const BASE64_MAX_DEPTH = 8;
+  const BASE64_MAX_FIELDS = 200;
+  const BASE64_MIN_LEN = 100;
+  let historyPersistTimer = null;
   // 是否开始监控
   let isMonitoring = false;
   // 原始fetch和XMLHttpRequest方法
@@ -33,6 +45,10 @@
   let originalXHRSend = XMLHttpRequest.prototype.send;
   // 控制台日志历史
   let consoleLogs = [];
+  // 控制台日志短窗口去重（type+content，约 50ms）
+  let lastConsoleDedupKey = "";
+  let lastConsoleDedupAt = 0;
+  const CONSOLE_DEDUP_MS = 50;
   // 原始console方法
   let originalConsole = {
     log: console.log,
@@ -94,20 +110,26 @@
       })
       .join(" ");
 
+    const dedupKey = type + "\0" + content;
+    const now = Date.now();
+    if (dedupKey === lastConsoleDedupKey && now - lastConsoleDedupAt < CONSOLE_DEDUP_MS) {
+      return;
+    }
+    lastConsoleDedupKey = dedupKey;
+    lastConsoleDedupAt = now;
+
     consoleLogs.push({ type, timestamp, content });
 
-    // 限制日志数量
-    if (consoleLogs.length > 500) {
-      // 使用splice修改现有数组而不是重新赋值
-      const newLogs = consoleLogs.slice(-500);
-      consoleLogs.splice(0, consoleLogs.length, ...newLogs);
+    // 限制日志数量（环形缓冲：shift 循环，禁止 splice 大展开）
+    while (consoleLogs.length > CONSOLE_MEM_MAX) {
+      consoleLogs.shift();
     }
 
-    // 更新显示（仅在monitorWindow可用时更新）
+    // 增量追加显示（仅在 monitorWindow 可用时更新；全量重建见 updateConsoleLogs）
     try {
-      if (typeof monitorWindow !== 'undefined' && monitorWindow && !monitorWindow.closed) {
+      if (typeof monitorWindow !== "undefined" && monitorWindow && !monitorWindow.closed) {
         setTimeout(() => {
-          updateConsoleLogs();
+          appendConsoleLogEntry({ type, timestamp, content });
         }, 0);
       }
     } catch (e) {
@@ -140,13 +162,13 @@
       addConsoleLog("debug", ...args);
       originalConsole.debug.apply(console, args);
     };
-    
+
     // 拦截 trace 方法以捕获堆栈跟踪
     console.trace = function (...args) {
       addConsoleLog("trace", ...args);
       originalConsole.trace.apply(console, args);
     };
-    
+
     // 拦截其他控制台方法
     if (originalConsole.table) {
       console.table = function (...args) {
@@ -154,105 +176,105 @@
         originalConsole.table.apply(console, args);
       };
     }
-    
+
     if (originalConsole.time) {
       console.time = function (...args) {
         addConsoleLog("time", ...args);
         originalConsole.time.apply(console, args);
       };
     }
-    
+
     if (originalConsole.timeEnd) {
       console.timeEnd = function (...args) {
         addConsoleLog("timeEnd", ...args);
         originalConsole.timeEnd.apply(console, args);
       };
     }
-    
+
     if (originalConsole.timeLog) {
       console.timeLog = function (...args) {
         addConsoleLog("timeLog", ...args);
         originalConsole.timeLog.apply(console, args);
       };
     }
-    
+
     if (originalConsole.count) {
       console.count = function (...args) {
         addConsoleLog("count", ...args);
         originalConsole.count.apply(console, args);
       };
     }
-    
+
     if (originalConsole.countReset) {
       console.countReset = function (...args) {
         addConsoleLog("countReset", ...args);
         originalConsole.countReset.apply(console, args);
       };
     }
-    
+
     if (originalConsole.group) {
       console.group = function (...args) {
         addConsoleLog("group", ...args);
         originalConsole.group.apply(console, args);
       };
     }
-    
+
     if (originalConsole.groupCollapsed) {
       console.groupCollapsed = function (...args) {
         addConsoleLog("groupCollapsed", ...args);
         originalConsole.groupCollapsed.apply(console, args);
       };
     }
-    
+
     if (originalConsole.groupEnd) {
       console.groupEnd = function (...args) {
         addConsoleLog("groupEnd", ...args);
         originalConsole.groupEnd.apply(console, args);
       };
     }
-    
+
     if (originalConsole.clear) {
       console.clear = function (...args) {
         addConsoleLog("clear", ...args);
         originalConsole.clear.apply(console, args);
       };
     }
-    
+
     if (originalConsole.assert) {
       console.assert = function (...args) {
         addConsoleLog("assert", ...args);
         originalConsole.assert.apply(console, args);
       };
     }
-    
+
     if (originalConsole.dir) {
       console.dir = function (...args) {
         addConsoleLog("dir", ...args);
         originalConsole.dir.apply(console, args);
       };
     }
-    
+
     if (originalConsole.dirxml) {
       console.dirxml = function (...args) {
         addConsoleLog("dirxml", ...args);
         originalConsole.dirxml.apply(console, args);
       };
     }
-    
+
     if (originalConsole.profile) {
       console.profile = function (...args) {
         addConsoleLog("profile", ...args);
         originalConsole.profile.apply(console, args);
       };
     }
-    
+
     if (originalConsole.profileEnd) {
       console.profileEnd = function (...args) {
         addConsoleLog("profileEnd", ...args);
         originalConsole.profileEnd.apply(console, args);
       };
     }
-    
+
     if (originalConsole.timeStamp) {
       console.timeStamp = function (...args) {
         addConsoleLog("timeStamp", ...args);
@@ -367,29 +389,29 @@
       script.textContent = scriptContent;
       (document.head || document.documentElement).appendChild(script);
       script.remove(); // 执行后移除标签
-      
+
       // 监听来自页面上下文的日志事件
       window.addEventListener('api-monitor-console-log', function(e) {
         if (e.detail) {
           addConsoleLog(e.detail.type, e.detail.content);
         }
       });
-      
+
     } catch (e) {
       console.error('注入控制台拦截脚本失败:', e);
     }
   })();
-  
+
   // 捕获未处理的异常
   window.addEventListener('error', function(event) {
     addConsoleLog('error', `Uncaught Error: ${event.message}\n${event.filename}:${event.lineno}:${event.colno}\nSTACK: ${event.error?.stack || 'No stack trace'}`);
   });
-  
+
   // 捕获未处理的Promise拒绝
   window.addEventListener('unhandledrejection', function(event) {
     addConsoleLog('error', `Unhandled Promise Rejection: ${event.reason || 'Unknown reason'}\nSTACK: ${event.reason?.stack || 'No stack trace'}`);
   });
-  
+
   // 捕获资源加载错误
   window.addEventListener('load', function() {
     // 使用 PerformanceObserver 捕获资源加载问题
@@ -401,7 +423,7 @@
             if (entry.duration > 5000) { // 超过5秒的资源加载
               addConsoleLog('warn', `Slow Resource Loading: ${entry.name} took ${Math.round(entry.duration)}ms`);
             }
-            
+
             // 检查资源加载错误
             if (entry.transferSize === 0 && entry.decodedBodySize > 0) {
               addConsoleLog('error', `Resource Failed to Load: ${entry.name}`);
@@ -414,7 +436,7 @@
           }
         });
       });
-      
+
       try {
         perfObserver.observe({entryTypes: ['resource', 'navigation']});
       } catch(e) {
@@ -422,7 +444,7 @@
       }
     }
   });
-  
+
   // 监听资源加载错误
   window.addEventListener('error', function(event) {
     if (event.target !== window) {
@@ -430,49 +452,6 @@
       addConsoleLog('error', `Resource Load Error: ${event.target.localName || 'Unknown'} - ${event.target.src || event.target.href || 'Unknown source'}`);
     }
   }, true);  // 使用捕获阶段
-  
-  // 使用 MutationObserver 监视页面上的错误信息
-  if (window.MutationObserver) {
-    const observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        mutation.addedNodes.forEach(function(node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // 检查是否有错误或警告相关的类名或文本
-            const textContent = node.textContent || '';
-            const className = node.className || '';
-            const tagName = node.tagName || '';
-            
-            // 检查是否包含错误或警告信息
-            if (textContent.toLowerCase().includes('error') || 
-                textContent.toLowerCase().includes('warn') ||
-                textContent.toLowerCase().includes('failed') ||
-                className.toLowerCase().includes('error') ||
-                className.toLowerCase().includes('warn')) {
-              addConsoleLog('info', `Potential Warning/Alert in DOM: ${textContent.substring(0, 200)}`);
-            }
-          }
-        });
-      });
-    });
-    
-    // 确保document.body存在后再开始观察
-    if (document.body) {
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-    } else {
-      // 如果document.body尚不存在，等待DOM加载完成
-      document.addEventListener('DOMContentLoaded', function() {
-        if (document.body) {
-          observer.observe(document.body, {
-            childList: true,
-            subtree: true
-          });
-        }
-      });
-    }
-  }
 
   // 全局变量用于存储监控窗口
   let monitorWindow = null;
@@ -626,7 +605,7 @@
     const windowFeatures =
       "width=800,height=600,toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes";
     monitorWindow = window.open("about:blank", "apiMonitorWindow", windowFeatures);
-    
+
     if (!monitorWindow) {
       alert("无法打开新窗口，请检查浏览器弹窗设置");
       return;
@@ -917,7 +896,7 @@
         }
       }, 100);
     }
-    
+
 
 
     // 等待 DOM 完全加载后再添加事件监听器
@@ -1145,7 +1124,8 @@
       }
     });
 
-    // 初始化时更新控制台日志
+    // 初始化时全量填充列表与控制台（增量路径不会自动带回历史）
+    updateRequestList();
     updateConsoleLogs();
   }
 
@@ -1213,6 +1193,88 @@
   // 将switchTab函数暴露到window对象上
   window.switchTab = switchTab;
 
+  // 创建 KV 值展示节点（对象 pretty JSON，其它 String）
+  function createExpandableValue(monitorWindow, value) {
+    const isObject = value && typeof value === "object";
+    const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
+    const pre = monitorWindow.document.createElement("pre");
+    pre.textContent = fullValueText;
+    pre.style.cssText =
+      "margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;";
+    return pre;
+  }
+
+  // 公共 KV 表格渲染（LocalStorage / SessionStorage / Cookie 共用）
+  function renderKeyValueTable(monitorWindow, contentElement, data, emptyText) {
+    contentElement.innerHTML = "";
+    if (!data || Object.keys(data).length === 0) {
+      contentElement.innerHTML =
+        '<div style="color: #666; text-align: center; padding: 20px;">' +
+        emptyText +
+        "</div>";
+      return;
+    }
+
+    const table = monitorWindow.document.createElement("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "13px";
+
+    const thead = monitorWindow.document.createElement("thead");
+    const headerRow = monitorWindow.document.createElement("tr");
+    headerRow.style.backgroundColor = "#f5f5f5";
+
+    const keyHeader = monitorWindow.document.createElement("th");
+    keyHeader.textContent = "键";
+    keyHeader.style.padding = "8px";
+    keyHeader.style.border = "1px solid #ddd";
+    keyHeader.style.fontWeight = "bold";
+
+    const valueHeader = monitorWindow.document.createElement("th");
+    valueHeader.textContent = "值";
+    valueHeader.style.padding = "8px";
+    valueHeader.style.border = "1px solid #ddd";
+    valueHeader.style.fontWeight = "bold";
+    valueHeader.style.width = "70%";
+
+    headerRow.appendChild(keyHeader);
+    headerRow.appendChild(valueHeader);
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = monitorWindow.document.createElement("tbody");
+
+    Object.entries(data).forEach(([key, value]) => {
+      const row = monitorWindow.document.createElement("tr");
+      row.style.borderBottom = "1px solid #eee";
+      row.addEventListener("mouseenter", () => {
+        row.style.backgroundColor = "#f9f9f9";
+      });
+      row.addEventListener("mouseleave", () => {
+        row.style.backgroundColor = "";
+      });
+
+      const keyCell = monitorWindow.document.createElement("td");
+      keyCell.textContent = key;
+      keyCell.style.padding = "8px";
+      keyCell.style.border = "1px solid #ddd";
+      keyCell.style.fontFamily = "monospace";
+      keyCell.style.verticalAlign = "top";
+
+      const valueCell = monitorWindow.document.createElement("td");
+      valueCell.appendChild(createExpandableValue(monitorWindow, value));
+      valueCell.style.padding = "8px";
+      valueCell.style.border = "1px solid #ddd";
+
+      row.appendChild(keyCell);
+      row.appendChild(valueCell);
+      tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    contentElement.appendChild(table);
+  }
+
   // 更新LocalStorage显示
   function updateLocalStorageDisplay() {
     if (!monitorWindow || monitorWindow.closed) return;
@@ -1221,7 +1283,6 @@
       const contentElement = monitorWindow.document.getElementById(
         "localstorage-content"
       );
-      contentElement.innerHTML = "";
 
       const localStorageData = {};
       for (let i = 0; i < localStorage.length; i++) {
@@ -1233,86 +1294,12 @@
         }
       }
 
-      if (Object.keys(localStorageData).length === 0) {
-        contentElement.innerHTML =
-          '<div style="color: #666; text-align: center; padding: 20px;">LocalStorage 为空</div>';
-        return;
-      }
-
-      // 创建表格展示数据
-      const table = monitorWindow.document.createElement("table");
-      table.style.width = "100%";
-      table.style.borderCollapse = "collapse";
-      table.style.fontSize = "13px";
-
-      // 添加表头
-      const thead = monitorWindow.document.createElement("thead");
-      const headerRow = monitorWindow.document.createElement("tr");
-      headerRow.style.backgroundColor = "#f5f5f5";
-
-      const keyHeader = monitorWindow.document.createElement("th");
-      keyHeader.textContent = "键";
-      keyHeader.style.padding = "8px";
-      keyHeader.style.border = "1px solid #ddd";
-      keyHeader.style.fontWeight = "bold";
-
-      const valueHeader = monitorWindow.document.createElement("th");
-      valueHeader.textContent = "值";
-      valueHeader.style.padding = "8px";
-      valueHeader.style.border = "1px solid #ddd";
-      valueHeader.style.fontWeight = "bold";
-      valueHeader.style.width = "70%";
-
-      headerRow.appendChild(keyHeader);
-      headerRow.appendChild(valueHeader);
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      // 添加数据行
-      const tbody = monitorWindow.document.createElement("tbody");
-
-      // 创建展开/收缩切换函数
-      function createExpandableValue(monitorWindow, value) {
-        const isObject = value && typeof value === "object";
-        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
-        const pre = monitorWindow.document.createElement('pre');
-        pre.textContent = fullValueText;
-        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
-        return pre;
-      }
-
-
-      Object.entries(localStorageData).forEach(([key, value]) => {
-        const row = monitorWindow.document.createElement("tr");
-        row.style.borderBottom = "1px solid #eee";
-        row.addEventListener("mouseenter", () => {
-          row.style.backgroundColor = "#f9f9f9";
-        });
-        row.addEventListener("mouseleave", () => {
-          row.style.backgroundColor = "";
-        });
-
-        const keyCell = monitorWindow.document.createElement("td");
-        keyCell.textContent = key;
-        keyCell.style.padding = "8px";
-        keyCell.style.border = "1px solid #ddd";
-        keyCell.style.fontFamily = "monospace";
-        keyCell.style.verticalAlign = "top";
-
-        const valueCell = monitorWindow.document.createElement("td");
-        // 使用可展开/收缩的组件
-        const expandableValue = createExpandableValue(monitorWindow, value);
-        valueCell.appendChild(expandableValue);
-        valueCell.style.padding = "8px";
-        valueCell.style.border = "1px solid #ddd";
-
-        row.appendChild(keyCell);
-        row.appendChild(valueCell);
-        tbody.appendChild(row);
-      });
-
-      table.appendChild(tbody);
-      contentElement.appendChild(table);
+      renderKeyValueTable(
+        monitorWindow,
+        contentElement,
+        localStorageData,
+        "LocalStorage 为空"
+      );
     } catch (error) {
       const contentElement = monitorWindow.document.getElementById(
         "localstorage-content"
@@ -1329,7 +1316,6 @@
       const contentElement = monitorWindow.document.getElementById(
         "sessionstorage-content"
       );
-      contentElement.innerHTML = "";
 
       const sessionStorageData = {};
       for (let i = 0; i < sessionStorage.length; i++) {
@@ -1341,86 +1327,12 @@
         }
       }
 
-      if (Object.keys(sessionStorageData).length === 0) {
-        contentElement.innerHTML =
-          '<div style="color: #666; text-align: center; padding: 20px;">SessionStorage 为空</div>';
-        return;
-      }
-
-      // 创建表格展示数据
-      const table = monitorWindow.document.createElement("table");
-      table.style.width = "100%";
-      table.style.borderCollapse = "collapse";
-      table.style.fontSize = "13px";
-
-      // 添加表头
-      const thead = monitorWindow.document.createElement("thead");
-      const headerRow = monitorWindow.document.createElement("tr");
-      headerRow.style.backgroundColor = "#f5f5f5";
-
-      const keyHeader = monitorWindow.document.createElement("th");
-      keyHeader.textContent = "键";
-      keyHeader.style.padding = "8px";
-      keyHeader.style.border = "1px solid #ddd";
-      keyHeader.style.fontWeight = "bold";
-
-      const valueHeader = monitorWindow.document.createElement("th");
-      valueHeader.textContent = "值";
-      valueHeader.style.padding = "8px";
-      valueHeader.style.border = "1px solid #ddd";
-      valueHeader.style.fontWeight = "bold";
-      valueHeader.style.width = "70%";
-
-      headerRow.appendChild(keyHeader);
-      headerRow.appendChild(valueHeader);
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      // 添加数据行
-      const tbody = monitorWindow.document.createElement("tbody");
-
-      // 创建展开/收缩切换函数
-      function createExpandableValue(monitorWindow, value) {
-        const isObject = value && typeof value === "object";
-        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
-        const pre = monitorWindow.document.createElement('pre');
-        pre.textContent = fullValueText;
-        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
-        return pre;
-      }
-
-
-      Object.entries(sessionStorageData).forEach(([key, value]) => {
-        const row = monitorWindow.document.createElement("tr");
-        row.style.borderBottom = "1px solid #eee";
-        row.addEventListener("mouseenter", () => {
-          row.style.backgroundColor = "#f9f9f9";
-        });
-        row.addEventListener("mouseleave", () => {
-          row.style.backgroundColor = "";
-        });
-
-        const keyCell = monitorWindow.document.createElement("td");
-        keyCell.textContent = key;
-        keyCell.style.padding = "8px";
-        keyCell.style.border = "1px solid #ddd";
-        keyCell.style.fontFamily = "monospace";
-        keyCell.style.verticalAlign = "top";
-
-        const valueCell = monitorWindow.document.createElement("td");
-        // 使用可展开/收缩的组件
-        const expandableValue = createExpandableValue(monitorWindow, value);
-        valueCell.appendChild(expandableValue);
-        valueCell.style.padding = "8px";
-        valueCell.style.border = "1px solid #ddd";
-
-        row.appendChild(keyCell);
-        row.appendChild(valueCell);
-        tbody.appendChild(row);
-      });
-
-      table.appendChild(tbody);
-      contentElement.appendChild(table);
+      renderKeyValueTable(
+        monitorWindow,
+        contentElement,
+        sessionStorageData,
+        "SessionStorage 为空"
+      );
     } catch (error) {
       const contentElement = monitorWindow.document.getElementById(
         "sessionstorage-content"
@@ -1436,7 +1348,6 @@
     try {
       const contentElement =
         monitorWindow.document.getElementById("cookie-content");
-      contentElement.innerHTML = "";
 
       const cookies = document.cookie.split(";");
       const cookieData = {};
@@ -1460,86 +1371,7 @@
         }
       });
 
-      if (Object.keys(cookieData).length === 0) {
-        contentElement.innerHTML =
-          '<div style="color: #666; text-align: center; padding: 20px;">Cookie 为空</div>';
-        return;
-      }
-
-      // 创建表格展示数据
-      const table = monitorWindow.document.createElement("table");
-      table.style.width = "100%";
-      table.style.borderCollapse = "collapse";
-      table.style.fontSize = "13px";
-
-      // 添加表头
-      const thead = monitorWindow.document.createElement("thead");
-      const headerRow = monitorWindow.document.createElement("tr");
-      headerRow.style.backgroundColor = "#f5f5f5";
-
-      const keyHeader = monitorWindow.document.createElement("th");
-      keyHeader.textContent = "键";
-      keyHeader.style.padding = "8px";
-      keyHeader.style.border = "1px solid #ddd";
-      keyHeader.style.fontWeight = "bold";
-
-      const valueHeader = monitorWindow.document.createElement("th");
-      valueHeader.textContent = "值";
-      valueHeader.style.padding = "8px";
-      valueHeader.style.border = "1px solid #ddd";
-      valueHeader.style.fontWeight = "bold";
-      valueHeader.style.width = "70%";
-
-      headerRow.appendChild(keyHeader);
-      headerRow.appendChild(valueHeader);
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      // 添加数据行
-      const tbody = monitorWindow.document.createElement("tbody");
-
-      // 创建展开/收缩切换函数
-      function createExpandableValue(monitorWindow, value) {
-        const isObject = value && typeof value === "object";
-        const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
-        const pre = monitorWindow.document.createElement('pre');
-        pre.textContent = fullValueText;
-        pre.style.cssText = 'margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;';
-        return pre;
-      }
-
-
-      Object.entries(cookieData).forEach(([key, value]) => {
-        const row = monitorWindow.document.createElement("tr");
-        row.style.borderBottom = "1px solid #eee";
-        row.addEventListener("mouseenter", () => {
-          row.style.backgroundColor = "#f9f9f9";
-        });
-        row.addEventListener("mouseleave", () => {
-          row.style.backgroundColor = "";
-        });
-
-        const keyCell = monitorWindow.document.createElement("td");
-        keyCell.textContent = key;
-        keyCell.style.padding = "8px";
-        keyCell.style.border = "1px solid #ddd";
-        keyCell.style.fontFamily = "monospace";
-        keyCell.style.verticalAlign = "top";
-
-        const valueCell = monitorWindow.document.createElement("td");
-        // 使用可展开/收缩的组件
-        const expandableValue = createExpandableValue(monitorWindow, value);
-        valueCell.appendChild(expandableValue);
-        valueCell.style.padding = "8px";
-        valueCell.style.border = "1px solid #ddd";
-
-        row.appendChild(keyCell);
-        row.appendChild(valueCell);
-        tbody.appendChild(row);
-      });
-
-      table.appendChild(tbody);
-      contentElement.appendChild(table);
+      renderKeyValueTable(monitorWindow, contentElement, cookieData, "Cookie 为空");
     } catch (error) {
       const contentElement =
         monitorWindow.document.getElementById("cookie-content");
@@ -1547,39 +1379,56 @@
     }
   }
 
-  // 更新控制台日志显示
-  function updateConsoleLogs() {
-    // 检查 monitorWindow 是否已定义且有效
-    if (typeof monitorWindow === 'undefined' || !monitorWindow || monitorWindow.closed) return;
-  
+  // 构建单条控制台日志 DOM 节点
+  function buildConsoleLogElement(log) {
+    const logElement = monitorWindow.document.createElement("div");
+    logElement.className = `console-log ${log.type}`;
+
+    const timeSpan = monitorWindow.document.createElement("span");
+    timeSpan.style.color = "#888";
+    timeSpan.style.marginRight = "10px";
+    timeSpan.textContent = log.timestamp;
+
+    const contentSpan = monitorWindow.document.createElement("span");
+    contentSpan.textContent = log.content;
+
+    logElement.appendChild(timeSpan);
+    logElement.appendChild(contentSpan);
+    return logElement;
+  }
+
+  // 增量追加一条控制台日志（超 CONSOLE_VIEW_MAX 删最旧）
+  function appendConsoleLogEntry(log) {
+    if (typeof monitorWindow === "undefined" || !monitorWindow || monitorWindow.closed) {
+      return;
+    }
+
     const consolePanel = monitorWindow.document.getElementById("console-panel");
     if (!consolePanel) return;
-  
+
+    consolePanel.appendChild(buildConsoleLogElement(log));
+    while (consolePanel.children.length > CONSOLE_VIEW_MAX) {
+      consolePanel.removeChild(consolePanel.firstChild);
+    }
+    consolePanel.scrollTop = consolePanel.scrollHeight;
+  }
+
+  // 全量重建控制台日志显示（切换 Tab / 清空历史时使用）
+  function updateConsoleLogs() {
+    if (typeof monitorWindow === "undefined" || !monitorWindow || monitorWindow.closed) {
+      return;
+    }
+
+    const consolePanel = monitorWindow.document.getElementById("console-panel");
+    if (!consolePanel) return;
+
     consolePanel.innerHTML = "";
-  
-    // 限制显示最近200条日志
-    const recentLogs = consoleLogs.slice(-200);
-  
+
+    const recentLogs = consoleLogs.slice(-CONSOLE_VIEW_MAX);
     recentLogs.forEach((log) => {
-      const logElement = monitorWindow.document.createElement("div");
-      logElement.className = `console-log ${log.type}`;
-  
-      // 格式化时间
-      const timeSpan = monitorWindow.document.createElement("span");
-      timeSpan.style.color = "#888";
-      timeSpan.style.marginRight = "10px";
-      timeSpan.textContent = log.timestamp;
-  
-      // 格式化日志内容
-      const contentSpan = monitorWindow.document.createElement("span");
-      contentSpan.textContent = log.content;
-  
-      logElement.appendChild(timeSpan);
-      logElement.appendChild(contentSpan);
-      consolePanel.appendChild(logElement);
+      consolePanel.appendChild(buildConsoleLogElement(log));
     });
-  
-    // 自动滚动到底部
+
     consolePanel.scrollTop = consolePanel.scrollHeight;
   }
 
@@ -1694,7 +1543,10 @@
       monitorKeywords = defaultKeywords;
       return defaultKeywords;
     }
-    monitorKeywords = saved.split(",");
+    monitorKeywords = saved
+      .split(",")
+      .map((keyword) => keyword.trim())
+      .filter((keyword) => keyword.length > 0);
     return monitorKeywords;
   }
 
@@ -1744,29 +1596,20 @@
           // 克隆响应以便读取body
           const clonedResponse = response.clone();
 
-          // 尝试解析响应体
+          // 先 text 再 JSON.parse，避免非 JSON 体先 json() 失败
           clonedResponse
-            .json()
-            .then((json) => {
-              requestInfo.responseBody = json;
+            .text()
+            .then((text) => {
+              try {
+                requestInfo.responseBody = JSON.parse(text);
+              } catch {
+                requestInfo.responseBody = text;
+              }
               addRequestToList(requestInfo);
             })
             .catch(() => {
-              // 如果不是JSON，尝试作为文本读取
-              clonedResponse
-                .text()
-                .then((text) => {
-                  try {
-                    requestInfo.responseBody = JSON.parse(text);
-                  } catch {
-                    requestInfo.responseBody = text;
-                  }
-                  addRequestToList(requestInfo);
-                })
-                .catch(() => {
-                  requestInfo.responseBody = "[无法解析响应体]";
-                  addRequestToList(requestInfo);
-                });
+              requestInfo.responseBody = "[无法解析响应体]";
+              addRequestToList(requestInfo);
             });
 
           // 获取响应头
@@ -1815,67 +1658,61 @@
           return originalSetRequestHeader.call(this, header, value);
         };
 
-        // 监听load事件
-        const originalOnload = this.onload;
-        this.onload = function () {
-          if (this._requestInfo) {
-            this._requestInfo.status = this.status;
-            this._requestInfo.duration =
-              performance.now() - this._requestInfo._startTime;
+        // 旁路采集：addEventListener 不覆盖业务 onload/onerror；_listed 防重入
+        const xhr = this;
+        const finish = (status, body) => {
+          if (!xhr._requestInfo || xhr._requestInfo._listed) return;
+          xhr._requestInfo._listed = true;
+          xhr._requestInfo.status = status;
+          xhr._requestInfo.duration =
+            performance.now() - xhr._requestInfo._startTime;
+          if (body !== undefined) {
+            xhr._requestInfo.responseBody = body;
+          } else {
+            try {
+              xhr._requestInfo.responseBody = JSON.parse(xhr.responseText);
+            } catch {
+              xhr._requestInfo.responseBody = xhr.responseText || "";
+            }
+          }
+          addRequestToList(xhr._requestInfo);
+        };
 
-            // 获取响应头
-            const headers = {};
-            const headerLines = this.getAllResponseHeaders().split("\r\n");
-            for (let line of headerLines) {
-              if (line.trim()) {
+        xhr.addEventListener("load", function () {
+          const headers = {};
+          const headerLines = (this.getAllResponseHeaders() || "").split(
+            "\r\n"
+          );
+          for (let line of headerLines) {
+            if (line.trim()) {
+              const idx = line.indexOf(": ");
+              if (idx > -1) {
+                headers[line.slice(0, idx)] = line.slice(idx + 2);
+              } else {
                 const [key, value] = line.split(": ");
                 headers[key] = value;
               }
             }
-            this._requestInfo.responseHeaders = headers;
-
-            // 尝试解析响应体
-            try {
-              this._requestInfo.responseBody = JSON.parse(this.responseText);
-            } catch {
-              try {
-                this._requestInfo.responseBody = this.responseText;
-              } catch {
-                this._requestInfo.responseBody = "";
-              }
-            }
-
-            addRequestToList(this._requestInfo);
           }
-
-          if (originalOnload) {
-            return originalOnload.apply(this, arguments);
-          }
-        };
-
-        // 监听error事件
-        const originalOnerror = this.onerror;
-        this.onerror = function (event) {
           if (this._requestInfo) {
-            this._requestInfo.status = "ERROR";
-            // 捕获更详细的错误信息
-            const errorMessage = event?.message || "[XHR网络错误]";
-            this._requestInfo.responseBody = `[XHR错误] ${errorMessage}`;
-            this._requestInfo.duration =
-              performance.now() - this._requestInfo._startTime;
-            addRequestToList(this._requestInfo);
-            // 同时将错误信息添加到控制台
-            addConsoleLog(
-              "error",
-              `XHR错误: ${errorMessage}`,
-              this._requestInfo.url
-            );
+            this._requestInfo.responseHeaders = headers;
           }
-
-          if (originalOnerror) {
-            return originalOnerror.apply(this, arguments);
-          }
-        };
+          finish(this.status);
+        });
+        xhr.addEventListener("error", function () {
+          finish("ERROR", "[XHR错误] [XHR网络错误]");
+          addConsoleLog(
+            "error",
+            "XHR错误: [XHR网络错误]",
+            xhr._requestInfo && xhr._requestInfo.url
+          );
+        });
+        xhr.addEventListener("timeout", function () {
+          finish("TIMEOUT", "[XHR超时]");
+        });
+        xhr.addEventListener("abort", function () {
+          finish("ABORT", "[XHR中止]");
+        });
       }
 
       return originalXHROpen.apply(this, arguments);
@@ -1905,6 +1742,57 @@
     console.log(`监控已为${getDomainKey()}停止，但控制台日志仍将被捕获`);
   }
 
+  // 序列化历史用于落盘：超长 body 占位，内存 requestHistory 保持完整
+  function serializeHistoryForPersist(history) {
+    return history.map((item) => {
+      const copy = { ...item };
+      const truncate = (val) => {
+        if (typeof val === "string" && val.length > BODY_PERSIST_MAX_CHARS) {
+          return `[已省略，长度 ${val.length}]`;
+        }
+        if (val && typeof val === "object") {
+          try {
+            const s = JSON.stringify(val);
+            if (s.length > BODY_PERSIST_MAX_CHARS) {
+              return `[已省略，长度 ${s.length}]`;
+            }
+          } catch (e) {}
+        }
+        return val;
+      };
+      copy.requestBody = truncate(copy.requestBody);
+      copy.responseBody = truncate(copy.responseBody);
+      return copy;
+    });
+  }
+
+  function schedulePersistRequestHistory() {
+    if (historyPersistTimer) clearTimeout(historyPersistTimer);
+    historyPersistTimer = setTimeout(() => {
+      historyPersistTimer = null;
+      try {
+        GM_setValue(
+          "apiRequestHistory",
+          JSON.stringify(serializeHistoryForPersist(requestHistory))
+        );
+      } catch (e) {
+        console.error("保存请求历史失败:", e);
+      }
+    }, HISTORY_PERSIST_DEBOUNCE_MS);
+  }
+
+  function persistRequestHistoryNow(valueJson) {
+    if (historyPersistTimer) {
+      clearTimeout(historyPersistTimer);
+      historyPersistTimer = null;
+    }
+    try {
+      GM_setValue("apiRequestHistory", valueJson);
+    } catch (e) {
+      console.error("保存请求历史失败:", e);
+    }
+  }
+
   // 添加请求到列表 - 只添加包含监控关键字的URL
   function addRequestToList(requestInfo) {
     if (shouldMonitorUrl(requestInfo.url)) {
@@ -1915,20 +1803,99 @@
         requestHistory = requestHistory.slice(0, MAX_HISTORY_SIZE);
       }
 
-      // 保存历史记录到GM_setValue
-      try {
-        GM_setValue("apiRequestHistory", JSON.stringify(requestHistory));
-      } catch (e) {
-        console.error("保存请求历史失败:", e);
-      }
+      // debounce 落盘（内存仍为完整 requestInfo）
+      schedulePersistRequestHistory();
 
-      updateRequestList();
+      // 窗口打开时增量 prepend，避免全量重建
+      if (monitorWindow && !monitorWindow.closed) {
+        updateRequestList({ prependRequest: requestInfo });
+      }
     }
   }
 
-  // 更新请求列表UI
-  function updateRequestList() {
-    // 检查监控窗口是否存在且未关闭
+  // 构建单个请求列表项 DOM（含状态色与当前打开项高亮）
+  function buildRequestListItem(request) {
+    const item = monitorWindow.document.createElement("div");
+    item.className = "api-request-item";
+    item.dataset.requestId = String(request.id);
+
+    // 如果是当前打开的请求，添加高亮样式
+    if (currentlyOpenRequestId === request.id) {
+      item.style.fontWeight = "bold";
+      item.style.backgroundColor = "#bbdefb";
+    } else {
+      // 根据状态设置颜色和图标
+      if (request.status === "ERROR") {
+        item.style.backgroundColor = "#ffebee";
+      } else if (typeof request.status === "number" && request.status >= 400) {
+        item.style.backgroundColor = "#fff8e1";
+      } else if (
+        typeof request.status === "number" &&
+        request.status >= 200 &&
+        request.status < 300
+      ) {
+        item.style.backgroundColor = "#e8f5e9";
+      }
+    }
+
+    const contentContainer = monitorWindow.document.createElement("div");
+    contentContainer.style.display = "flex";
+    contentContainer.style.alignItems = "center";
+
+    const statusIcon = monitorWindow.document.createElement("span");
+    if (request.status === "ERROR") {
+      statusIcon.textContent = "❌";
+      statusIcon.style.color = "#d32f2f";
+    } else if (typeof request.status === "number" && request.status >= 400) {
+      statusIcon.textContent = "⚠️";
+      statusIcon.style.color = "#ff8f00";
+    } else if (
+      typeof request.status === "number" &&
+      request.status >= 200 &&
+      request.status < 300
+    ) {
+      statusIcon.textContent = "✅";
+      statusIcon.style.color = "#388e3c";
+    } else {
+      statusIcon.textContent = "⏱️";
+      statusIcon.style.color = "#757575";
+    }
+    statusIcon.style.marginRight = "5px";
+    contentContainer.appendChild(statusIcon);
+
+    const timeColumn = monitorWindow.document.createElement("span");
+    timeColumn.className = "time-column";
+    timeColumn.textContent = request.timestamp;
+    contentContainer.appendChild(timeColumn);
+
+    const infoSpan = monitorWindow.document.createElement("span");
+    infoSpan.textContent = `${request.method} ${getShortUrl(request.url)} (${
+      request.status || "PENDING"
+    })`;
+    infoSpan.style.flex = "1";
+    contentContainer.appendChild(infoSpan);
+
+    const timeSpan = monitorWindow.document.createElement("span");
+    timeSpan.textContent = `${
+      request.duration ? Math.round(request.duration) + "ms" : ""
+    }`;
+    timeSpan.style.marginLeft = "10px";
+    timeSpan.style.color = "#666";
+    contentContainer.appendChild(timeSpan);
+
+    item.appendChild(contentContainer);
+
+    item.addEventListener("click", () => {
+      showRequestDetails(request);
+    });
+
+    return item;
+  }
+
+  // 更新请求列表 UI：默认全量；{ prependRequest } 增量 prepend
+  function updateRequestList(options) {
+    options = options || {};
+
     if (!monitorWindow || monitorWindow.closed) {
       return;
     }
@@ -1937,120 +1904,45 @@
       monitorWindow.document.getElementById("api-request-list");
     if (!listContainer) return;
 
-    listContainer.innerHTML = "";
-
-    // 限制显示最近50个请求
-    const recentRequests = requestHistory.slice(0, 50);
-
-    recentRequests.forEach((request) => {
-      const item = monitorWindow.document.createElement("div");
-      item.className = "api-request-item";
-
-      // 如果是当前打开的请求，添加高亮样式
-      if (currentlyOpenRequestId === request.id) {
-        item.style.fontWeight = "bold";
-        item.style.backgroundColor = "#bbdefb";
-      } else {
-        // 根据状态设置颜色和图标
-        if (request.status === "ERROR") {
-          item.style.backgroundColor = "#ffebee";
-        } else if (
-          typeof request.status === "number" &&
-          request.status >= 400
-        ) {
-          item.style.backgroundColor = "#fff8e1";
-        } else if (
-          typeof request.status === "number" &&
-          request.status >= 200 &&
-          request.status < 300
-        ) {
-          item.style.backgroundColor = "#e8f5e9";
-        }
-      }
-
-      // 创建容器div来容纳所有元素
-      const contentContainer = monitorWindow.document.createElement("div");
-      contentContainer.style.display = "flex";
-      contentContainer.style.alignItems = "center";
-
-      // 添加状态图标
-      const statusIcon = monitorWindow.document.createElement("span");
-      if (request.status === "ERROR") {
-        statusIcon.textContent = "❌";
-        statusIcon.style.color = "#d32f2f";
-      } else if (typeof request.status === "number" && request.status >= 400) {
-        statusIcon.textContent = "⚠️";
-        statusIcon.style.color = "#ff8f00";
-      } else if (
-        typeof request.status === "number" &&
-        request.status >= 200 &&
-        request.status < 300
-      ) {
-        statusIcon.textContent = "✅";
-        statusIcon.style.color = "#388e3c";
-      } else {
-        statusIcon.textContent = "⏱️";
-        statusIcon.style.color = "#757575";
-      }
-      statusIcon.style.marginRight = "5px";
-      contentContainer.appendChild(statusIcon);
-
-      // 请求时间列
-      const timeColumn = monitorWindow.document.createElement("span");
-      timeColumn.className = "time-column";
-      timeColumn.textContent = request.timestamp;
-      contentContainer.appendChild(timeColumn);
-
-      const infoSpan = monitorWindow.document.createElement("span");
-      infoSpan.textContent = `${request.method} ${getShortUrl(request.url)} (${
-        request.status || "PENDING"
-      })`;
-      infoSpan.style.flex = "1";
-      contentContainer.appendChild(infoSpan);
-
-      const timeSpan = monitorWindow.document.createElement("span");
-      timeSpan.textContent = `${
-        request.duration ? Math.round(request.duration) + "ms" : ""
-      }`;
-      timeSpan.style.marginLeft = "10px";
-      timeSpan.style.color = "#666";
-      contentContainer.appendChild(timeSpan);
-
-      // 将内容容器添加到item中
-      item.appendChild(contentContainer);
-
-      item.addEventListener("click", () => {
-        showRequestDetails(request);
+    // 全量路径：清空重建（清空历史、关详情、切换打开项时使用）
+    if (options.full !== false && !options.prependRequest) {
+      listContainer.innerHTML = "";
+      requestHistory.slice(0, REQUEST_LIST_VIEW_MAX).forEach((request) => {
+        listContainer.appendChild(buildRequestListItem(request));
       });
+      return;
+    }
 
-      listContainer.appendChild(item);
-    });
+    // 增量路径：新项 prepend，超上限删末项
+    if (options.prependRequest) {
+      listContainer.insertBefore(
+        buildRequestListItem(options.prependRequest),
+        listContainer.firstChild
+      );
+      while (listContainer.children.length > REQUEST_LIST_VIEW_MAX) {
+        listContainer.removeChild(listContainer.lastChild);
+      }
+    }
   }
 
   function getShortUrl(url) {
-    // 显示完整URL，但限制长度
-    // 首先检查是否存在监控关键字
-    let keywordFound = false;
-    let keywordStartIndex = url.length;
-
-    // 查找第一个出现的监控关键字
+    if (typeof url !== "string") return "";
+    let start = 0;
+    let found = false;
     if (monitorKeywords.length > 0) {
+      let best = url.length;
       for (const keyword of monitorKeywords) {
         const index = url.indexOf(keyword);
-        if (index !== -1 && index < keywordStartIndex) {
-          keywordStartIndex = index + keyword.length;
-          keywordFound = true;
+        if (index !== -1 && index < best) {
+          best = index;
+          found = true;
         }
       }
+      if (found) start = best;
     }
-
-    // 如果找到了监控关键字，从关键字开始显示，这样可以突出显示相关部分
-    // 但不再只显示关键字后面的部分，而是从关键字开始显示更多内容
-    let displayUrl = url;
-    if (keywordFound && keywordStartIndex > 0) {
-      // 显示从关键字开始的部分，但限制长度
-      displayUrl = url.substring(keywordStartIndex);
-    }
+    let displayUrl = found ? url.substring(start) : url;
+    const MAX = 120;
+    if (displayUrl.length > MAX) displayUrl = displayUrl.slice(0, MAX) + "…";
     return displayUrl;
   }
 
@@ -2059,6 +1951,7 @@
     if (!data || typeof data !== "object") return null;
 
     const base64Fields = [];
+    let fieldsVisited = 0;
 
     // 解析 Data URL 格式
     function parseDataUrl(dataUrl) {
@@ -2094,14 +1987,17 @@
       return mimeMap[mimeType] || "bin";
     }
 
-    // 递归查找 base64 字符串
-    function findBase64(obj, path = "") {
+    // 递归查找 base64 字符串（有界 DFS）
+    function findBase64(obj, path = "", depth = 0) {
+      if (depth > BASE64_MAX_DEPTH || fieldsVisited > BASE64_MAX_FIELDS) return;
+
       if (typeof obj === "string") {
-        // 检查路径是否包含encData字段
+        fieldsVisited++;
+        // 检查路径是否包含 encData 字段
         if (path.includes(".encData") || path === "encData") {
           return;
         }
-        
+
         let base64Data = null;
         let mimeType = "application/octet-stream";
         let fileType = "bin";
@@ -2115,34 +2011,45 @@
             fileType = getFileExtension(mimeType);
           }
         }
-        // 检测纯 base64 字符串
+        // 检测纯 base64 字符串：长度门槛 → magic 前缀优先 → 全量 regex
         else {
-          const base64Regex =
-            /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
-          if (obj.length > 100 && base64Regex.test(obj)) {
-            base64Data = obj;
+          if (obj.length < BASE64_MIN_LEN) return;
 
-            // 检测文件类型（通过 base64 头部）
-            try {
-              const header = obj.substring(0, 50);
-              if (header.startsWith("iVBORw0KGgo")) {
-                fileType = "png";
-                mimeType = "image/png";
-              } else if (header.startsWith("/9j/")) {
-                fileType = "jpg";
-                mimeType = "image/jpeg";
-              } else if (header.startsWith("R0lGOD")) {
-                fileType = "gif";
-                mimeType = "image/gif";
-              } else if (header.startsWith("UEs")) {
-                fileType = "zip";
-                mimeType = "application/zip";
-              } else if (header.startsWith("JVBERi0")) {
-                fileType = "pdf";
-                mimeType = "application/pdf";
-              }
-            } catch (e) {
-              console.error("检测文件类型失败:", e);
+          let magicMatched = false;
+          try {
+            const header = obj.substring(0, 50);
+            if (header.startsWith("iVBORw0KGgo")) {
+              fileType = "png";
+              mimeType = "image/png";
+              magicMatched = true;
+            } else if (header.startsWith("/9j/")) {
+              fileType = "jpg";
+              mimeType = "image/jpeg";
+              magicMatched = true;
+            } else if (header.startsWith("R0lGOD")) {
+              fileType = "gif";
+              mimeType = "image/gif";
+              magicMatched = true;
+            } else if (header.startsWith("UEs")) {
+              fileType = "zip";
+              mimeType = "application/zip";
+              magicMatched = true;
+            } else if (header.startsWith("JVBERi0")) {
+              fileType = "pdf";
+              mimeType = "application/pdf";
+              magicMatched = true;
+            }
+          } catch (e) {
+            console.error("检测文件类型失败:", e);
+          }
+
+          if (magicMatched) {
+            base64Data = obj;
+          } else {
+            const base64Regex =
+              /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
+            if (base64Regex.test(obj)) {
+              base64Data = obj;
             }
           }
         }
@@ -2158,10 +2065,11 @@
         }
       } else if (typeof obj === "object" && obj !== null) {
         for (const key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            const newPath = path ? `${path}.${key}` : key;
-            findBase64(obj[key], newPath);
-          }
+          if (!obj.hasOwnProperty(key)) continue;
+          fieldsVisited++;
+          if (fieldsVisited > BASE64_MAX_FIELDS) return;
+          const newPath = path ? `${path}.${key}` : key;
+          findBase64(obj[key], newPath, depth + 1);
         }
       }
     }
@@ -2320,6 +2228,53 @@
     modal.style.display = "block";
   }
 
+  // HTML 转义（详情等不可信字段；优先 textContent 时作兜底）
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // 详情区：带标签的文本行（不可信 value 仅 textContent）
+  function createDetailFieldRow(doc, label, value) {
+    const div = doc.createElement("div");
+    const strong = doc.createElement("strong");
+    strong.textContent = label;
+    div.appendChild(strong);
+    div.appendChild(doc.createTextNode(" " + String(value ?? "")));
+    return div;
+  }
+
+  // 详情区：标题 + 复制按钮 + <pre textContent>
+  function createDetailPreSection(doc, title, content) {
+    const section = doc.createElement("div");
+    const h4 = doc.createElement("h4");
+    h4.style.display = "inline-block";
+    h4.style.marginRight = "10px";
+    h4.textContent = title;
+
+    const pre = doc.createElement("pre");
+    pre.textContent = content == null ? "" : String(content);
+
+    const copyBtn = doc.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.title = "复制";
+    copyBtn.textContent = "📄";
+    copyBtn.addEventListener("click", () => {
+      if (monitorWindow && !monitorWindow.closed && monitorWindow.window.copyToClipboard) {
+        monitorWindow.window.copyToClipboard(pre.textContent);
+      }
+    });
+
+    section.appendChild(h4);
+    section.appendChild(copyBtn);
+    section.appendChild(pre);
+    return section;
+  }
+
   // 显示请求详情
   function showRequestDetails(request) {
     // 检查监控窗口是否存在且未关闭
@@ -2348,43 +2303,55 @@
     // 更新请求列表以显示高亮
     updateRequestList();
 
-    // 基本信息
-    const basicInfo = monitorWindow.document.createElement("div");
-    basicInfo.innerHTML = `
-            <h3 style="display: inline-block; margin-right: 10px;">请求详情</h3><button class="copy-btn" title="复制" onclick="copyToClipboard(this.parentElement.textContent)">📄</button>
-            <div><strong>时间:</strong> ${request.timestamp}</div>
-            <div><strong>方法:</strong> ${request.method}</div>
-            <div><strong>URL:</strong> ${request.url}</div>
-            <div><strong>状态:</strong> ${request.status}</div>
-            ${
-              request.duration
-                ? `<div><strong>耗时:</strong> ${Math.round(
-                    request.duration
-                  )}ms</div>`
-                : ""
-            }
-        `;
+    const doc = monitorWindow.document;
+
+    // 基本信息（不可信字段一律 textContent / createTextNode）
+    const basicInfo = doc.createElement("div");
+    const h3 = doc.createElement("h3");
+    h3.style.display = "inline-block";
+    h3.style.marginRight = "10px";
+    h3.textContent = "请求详情";
+    const basicCopyBtn = doc.createElement("button");
+    basicCopyBtn.className = "copy-btn";
+    basicCopyBtn.title = "复制";
+    basicCopyBtn.textContent = "📄";
+    basicCopyBtn.addEventListener("click", () => {
+      if (monitorWindow && !monitorWindow.closed && monitorWindow.window.copyToClipboard) {
+        monitorWindow.window.copyToClipboard(basicInfo.textContent);
+      }
+    });
+    basicInfo.appendChild(h3);
+    basicInfo.appendChild(basicCopyBtn);
+    basicInfo.appendChild(
+      createDetailFieldRow(doc, "时间:", request.timestamp)
+    );
+    basicInfo.appendChild(
+      createDetailFieldRow(doc, "方法:", request.method)
+    );
+    basicInfo.appendChild(createDetailFieldRow(doc, "URL:", request.url));
+    basicInfo.appendChild(
+      createDetailFieldRow(doc, "状态:", request.status)
+    );
+    if (request.duration) {
+      basicInfo.appendChild(
+        createDetailFieldRow(
+          doc,
+          "耗时:",
+          Math.round(request.duration) + "ms"
+        )
+      );
+    }
 
     // 请求头
-    const requestHeadersSection = monitorWindow.document.createElement("div");
     const requestHeadersData = request.headers || {};
     const requestHeadersContent = formatObject(requestHeadersData);
-    const isRequestHeadersObject =
-      requestHeadersData && typeof requestHeadersData === "object";
-    const requestHeadersContainerId = `json-request-headers-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    const requestHeadersContentId = `json-content-request-headers-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-      requestHeadersSection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">请求头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${requestHeadersContent}</pre>
-        `;
+    const requestHeadersSection = createDetailPreSection(
+      doc,
+      "请求头",
+      requestHeadersContent
+    );
 
     // 请求体（处理 base64 替换）
-    const requestBodySection = monitorWindow.document.createElement("div");
     let requestBodyContent = formatRequestBody(request.requestBody);
 
     // 尝试替换 base64 为文件占位符
@@ -2396,9 +2363,6 @@
         // 如果不是 JSON，就保持原样
       }
     }
-
-    // 存储 base64 字段信息用于创建下载按钮
-    const base64FieldsInfo = [];
 
     // 递归替换 base64 字符串
     function replaceBase64InRequestObject(obj) {
@@ -2428,49 +2392,28 @@
       return obj;
     }
 
-    // 判断是否为 JSON 对象，如果是则使用 JSONView 显示
-    let isRequestBodyJsonObject = false;
-    let requestBodyJsonData = null;
     if (requestData && typeof requestData === "object") {
-      isRequestBodyJsonObject = true;
       const replacedData = replaceBase64InRequestObject(requestData);
-      requestBodyJsonData = replacedData;
       requestBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
-    const requestBodyContainerId = `json-request-body-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    const requestBodyContentId = `json-content-request-body-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-      requestBodySection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">请求体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${requestBodyContent}</pre>
-        `;
+    const requestBodySection = createDetailPreSection(
+      doc,
+      "请求体",
+      requestBodyContent
+    );
 
     // 响应头
-    const responseHeadersSection = monitorWindow.document.createElement("div");
-    const responseHeadersData = request.responseHeaders || {};
     const responseHeadersContent = request.responseHeaders
       ? formatObject(request.responseHeaders)
       : "N/A";
-    const isResponseHeadersObject =
-      request.responseHeaders && typeof request.responseHeaders === "object";
-    const responseHeadersContainerId = `json-response-headers-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    const responseHeadersContentId = `json-content-response-headers-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-      responseHeadersSection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">响应头</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${responseHeadersContent}</pre>
-        `;
+    const responseHeadersSection = createDetailPreSection(
+      doc,
+      "响应头",
+      responseHeadersContent
+    );
 
     // 响应体（处理 base64 替换）
-    const responseBodySection = monitorWindow.document.createElement("div");
     let responseBodyContent = formatResponseBody(request.responseBody);
 
     // 尝试替换响应体中的 base64 为文件占位符
@@ -2483,14 +2426,14 @@
       }
     }
 
-    // 递归替换 base64 字符串（复用请求体的函数）
+    // 递归替换 base64 字符串
     function replaceBase64InObject(obj, path = "") {
       if (typeof obj === "string") {
         // 检查路径是否包含encData字段
         if (path.includes(".encData") || path === "encData") {
           return obj;
         }
-        
+
         // 检测 Data URL 或长 base64
         if (
           obj.startsWith("data:") ||
@@ -2517,26 +2460,16 @@
       return obj;
     }
 
-    // 判断是否为 JSON 对象，如果是则使用 JSONView 显示
-    let isJsonObject = false;
-    let jsonDataForView = null;
     if (responseData && typeof responseData === "object") {
-      isJsonObject = true;
       const replacedData = replaceBase64InObject(responseData);
-      jsonDataForView = replacedData;
       responseBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
-    const jsonContainerId = `json-response-body-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    const jsonContentId = `json-content-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-      responseBodySection.innerHTML = `
-            <h4 style="display: inline-block; margin-right: 10px;">响应体</h4><button class="copy-btn" title="复制" onclick="copyToClipboard(this.nextElementSibling.textContent)">📄</button>
-            <pre>${responseBodyContent}</pre>
-        `;
+    const responseBodySection = createDetailPreSection(
+      doc,
+      "响应体",
+      responseBodyContent
+    );
 
     // 清空详情面板并添加新内容
     // 保留关闭按钮和回到顶部按钮
@@ -2555,16 +2488,16 @@
 
     // 检测并添加 base64 下载按钮
     try {
-      let requestData = request.requestBody;
-      if (typeof requestData === "string") {
+      let requestDataForB64 = request.requestBody;
+      if (typeof requestDataForB64 === "string") {
         try {
-          requestData = JSON.parse(requestData);
+          requestDataForB64 = JSON.parse(requestDataForB64);
         } catch (e) {
           // 如果不是 JSON，就保持原样
         }
       }
       const base64Downloads = detectBase64AndCreateDownload(
-        requestData,
+        requestDataForB64,
         monitorWindow
       );
       if (base64Downloads) {
@@ -2577,22 +2510,18 @@
     detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
 
-
-
-
-
     // 检测并添加响应体的 base64 下载按钮
     try {
-      let responseData = request.responseBody;
-      if (typeof responseData === "string") {
+      let responseDataForB64 = request.responseBody;
+      if (typeof responseDataForB64 === "string") {
         try {
-          responseData = JSON.parse(responseData);
+          responseDataForB64 = JSON.parse(responseDataForB64);
         } catch (e) {
           // 如果不是 JSON，就保持原样
         }
       }
       const responseBase64Downloads = detectBase64AndCreateDownload(
-        responseData,
+        responseDataForB64,
         monitorWindow
       );
       if (responseBase64Downloads) {
@@ -2669,12 +2598,8 @@
     requestHistory = [];
     consoleLogs = []; // 清空控制台日志
 
-    // 清除保存的历史记录
-    try {
-      GM_setValue("apiRequestHistory", "[]");
-    } catch (e) {
-      console.error("清除请求历史失败:", e);
-    }
+    // 立即清除落盘历史并取消 pending debounce
+    persistRequestHistoryNow("[]");
 
     updateRequestList();
     updateConsoleLogs(); // 更新控制台日志显示
