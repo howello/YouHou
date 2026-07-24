@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.7.1
+// @version      2.8.0
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -59,6 +59,406 @@
   };
   // 监控URL关键字列表
   let monitorKeywords = [];
+
+  // ========== 浏览器端 SM4 ECB（兼容 gm-crypt 字符串密钥 + base64） ==========
+  const SM4_SBOX = [
+    0xd6, 0x90, 0xe9, 0xfe, 0xcc, 0xe1, 0x3d, 0xb7, 0x16, 0xb6, 0x14, 0xc2, 0x28, 0xfb, 0x2c, 0x05,
+    0x2b, 0x67, 0x9a, 0x76, 0x2a, 0xbe, 0x04, 0xc3, 0xaa, 0x44, 0x13, 0x26, 0x49, 0x86, 0x06, 0x99,
+    0x9c, 0x42, 0x50, 0xf4, 0x91, 0xef, 0x98, 0x7a, 0x33, 0x54, 0x0b, 0x43, 0xed, 0xcf, 0xac, 0x62,
+    0xe4, 0xb3, 0x1c, 0xa9, 0xc9, 0x08, 0xe8, 0x95, 0x80, 0xdf, 0x94, 0xfa, 0x75, 0x8f, 0x3f, 0xa6,
+    0x47, 0x07, 0xa7, 0xfc, 0xf3, 0x73, 0x17, 0xba, 0x83, 0x59, 0x3c, 0x19, 0xe6, 0x85, 0x4f, 0xa8,
+    0x68, 0x6b, 0x81, 0xb2, 0x71, 0x64, 0xda, 0x8b, 0xf8, 0xeb, 0x0f, 0x4b, 0x70, 0x56, 0x9d, 0x35,
+    0x1e, 0x24, 0x0e, 0x5e, 0x63, 0x58, 0xd1, 0xa2, 0x25, 0x22, 0x7c, 0x3b, 0x01, 0x21, 0x78, 0x87,
+    0xd4, 0x00, 0x46, 0x57, 0x9f, 0xd3, 0x27, 0x52, 0x4c, 0x36, 0x02, 0xe7, 0xa0, 0xc4, 0xc8, 0x9e,
+    0xea, 0xbf, 0x8a, 0xd2, 0x40, 0xc7, 0x38, 0xb5, 0xa3, 0xf7, 0xf2, 0xce, 0xf9, 0x61, 0x15, 0xa1,
+    0xe0, 0xae, 0x5d, 0xa4, 0x9b, 0x34, 0x1a, 0x55, 0xad, 0x93, 0x32, 0x30, 0xf5, 0x8c, 0xb1, 0xe3,
+    0x1d, 0xf6, 0xe2, 0x2e, 0x82, 0x66, 0xca, 0x60, 0xc0, 0x29, 0x23, 0xab, 0x0d, 0x53, 0x4e, 0x6f,
+    0xd5, 0xdb, 0x37, 0x45, 0xde, 0xfd, 0x8e, 0x2f, 0x03, 0xff, 0x6a, 0x72, 0x6d, 0x6c, 0x5b, 0x51,
+    0x8d, 0x1b, 0xaf, 0x92, 0xbb, 0xdd, 0xbc, 0x7f, 0x11, 0xd9, 0x5c, 0x41, 0x1f, 0x10, 0x5a, 0xd8,
+    0x0a, 0xc1, 0x31, 0x88, 0xa5, 0xcd, 0x7b, 0xbd, 0x2d, 0x74, 0xd0, 0x12, 0xb8, 0xe5, 0xb4, 0xb0,
+    0x89, 0x69, 0x97, 0x4a, 0x0c, 0x96, 0x77, 0x7e, 0x65, 0xb9, 0xf1, 0x09, 0xc5, 0x6e, 0xc6, 0x84,
+    0x18, 0xf0, 0x7d, 0xec, 0x3a, 0xdc, 0x4d, 0x20, 0x79, 0xee, 0x5f, 0x3e, 0xd7, 0xcb, 0x39, 0x48,
+  ];
+  const SM4_FK = [0xa3b1bac6, 0x56aa3350, 0x677d9197, 0xb27022dc];
+  const SM4_CK = [
+    0x00070e15, 0x1c232a31, 0x383f464d, 0x545b6269, 0x70777e85, 0x8c939aa1, 0xa8afb6bd, 0xc4cbd2d9,
+    0xe0e7eef5, 0xfc030a11, 0x181f262d, 0x343b4249, 0x50575e65, 0x6c737a81, 0x888f969d, 0xa4abb2b9,
+    0xc0c7ced5, 0xdce3eaf1, 0xf8ff060d, 0x141b2229, 0x30373e45, 0x4c535a61, 0x686f767d, 0x848b9299,
+    0xa0a7aeb5, 0xbcc3cad1, 0xd8dfe6ed, 0xf4fb0209, 0x10171e25, 0x2c333a41, 0x484f565d, 0x646b7279,
+  ];
+
+  function sm4Rotl(x, n) {
+    return ((x << n) | (x >>> (32 - n))) >>> 0;
+  }
+  function sm4Tau(a) {
+    return (
+      ((SM4_SBOX[(a >>> 24) & 0xff] << 24) |
+        (SM4_SBOX[(a >>> 16) & 0xff] << 16) |
+        (SM4_SBOX[(a >>> 8) & 0xff] << 8) |
+        SM4_SBOX[a & 0xff]) >>>
+      0
+    );
+  }
+  function sm4L(b) {
+    return (b ^ sm4Rotl(b, 2) ^ sm4Rotl(b, 10) ^ sm4Rotl(b, 18) ^ sm4Rotl(b, 24)) >>> 0;
+  }
+  function sm4LPrime(b) {
+    return (b ^ sm4Rotl(b, 13) ^ sm4Rotl(b, 23)) >>> 0;
+  }
+  function sm4KeyBytesFromString(keyStr) {
+    const key = new Uint8Array(16);
+    const s = String(keyStr || "");
+    for (let i = 0; i < 16; i++) {
+      key[i] = i < s.length ? s.charCodeAt(i) & 0xff : 0;
+    }
+    return key;
+  }
+  function sm4ExpandKey(keyBytes) {
+    const MK = new Array(4);
+    for (let i = 0; i < 4; i++) {
+      MK[i] =
+        ((keyBytes[4 * i] << 24) |
+          (keyBytes[4 * i + 1] << 16) |
+          (keyBytes[4 * i + 2] << 8) |
+          keyBytes[4 * i + 3]) >>>
+        0;
+    }
+    const K = new Array(36);
+    K[0] = (MK[0] ^ SM4_FK[0]) >>> 0;
+    K[1] = (MK[1] ^ SM4_FK[1]) >>> 0;
+    K[2] = (MK[2] ^ SM4_FK[2]) >>> 0;
+    K[3] = (MK[3] ^ SM4_FK[3]) >>> 0;
+    const rk = new Array(32);
+    for (let i = 0; i < 32; i++) {
+      K[i + 4] = (K[i] ^ sm4LPrime(sm4Tau(K[i + 1] ^ K[i + 2] ^ K[i + 3] ^ SM4_CK[i]))) >>> 0;
+      rk[i] = K[i + 4];
+    }
+    return rk;
+  }
+  function sm4OneBlock(input, rk, encrypt) {
+    const X = new Array(36);
+    for (let i = 0; i < 4; i++) {
+      X[i] =
+        ((input[4 * i] << 24) |
+          (input[4 * i + 1] << 16) |
+          (input[4 * i + 2] << 8) |
+          input[4 * i + 3]) >>>
+        0;
+    }
+    for (let i = 0; i < 32; i++) {
+      const rki = encrypt ? rk[i] : rk[31 - i];
+      X[i + 4] = (X[i] ^ sm4L(sm4Tau(X[i + 1] ^ X[i + 2] ^ X[i + 3] ^ rki))) >>> 0;
+    }
+    const out = new Uint8Array(16);
+    for (let i = 0; i < 4; i++) {
+      const v = X[35 - i];
+      out[4 * i] = (v >>> 24) & 0xff;
+      out[4 * i + 1] = (v >>> 16) & 0xff;
+      out[4 * i + 2] = (v >>> 8) & 0xff;
+      out[4 * i + 3] = v & 0xff;
+    }
+    return out;
+  }
+  function sm4Pkcs7Pad(data) {
+    const pad = 16 - (data.length % 16);
+    const out = new Uint8Array(data.length + pad);
+    out.set(data);
+    for (let i = data.length; i < out.length; i++) out[i] = pad;
+    return out;
+  }
+  function sm4Pkcs7Unpad(data) {
+    if (!data.length || data.length % 16 !== 0) {
+      throw new Error("SM4 解密数据长度非法");
+    }
+    const pad = data[data.length - 1];
+    if (pad < 1 || pad > 16) throw new Error("SM4 PKCS7 填充非法");
+    for (let i = data.length - pad; i < data.length; i++) {
+      if (data[i] !== pad) throw new Error("SM4 PKCS7 填充校验失败");
+    }
+    return data.subarray(0, data.length - pad);
+  }
+  function utf8ToBytes(str) {
+    return new TextEncoder().encode(String(str));
+  }
+  function bytesToUtf8(bytes) {
+    return new TextDecoder().decode(bytes);
+  }
+  function bytesToBase64(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function hexToBytes(hex) {
+    const clean = String(hex || "").replace(/\s+/g, "");
+    if (clean.length % 2 !== 0) throw new Error("十六进制长度必须为偶数");
+    const out = new Uint8Array(clean.length / 2);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = parseInt(clean.substr(i * 2, 2), 16);
+    }
+    return out;
+  }
+  function bytesToHex(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i++) {
+      s += ("0" + (bytes[i] & 0xff).toString(16)).slice(-2);
+    }
+    return s;
+  }
+  function sm4EcbCrypt(keyStr, dataBytes, encrypt) {
+    const rk = sm4ExpandKey(sm4KeyBytesFromString(keyStr));
+    const out = new Uint8Array(dataBytes.length);
+    for (let off = 0; off < dataBytes.length; off += 16) {
+      const block = dataBytes.subarray(off, off + 16);
+      out.set(sm4OneBlock(block, rk, encrypt), off);
+    }
+    return out;
+  }
+  function sm4EncryptToBase64(keyStr, plainText) {
+    const padded = sm4Pkcs7Pad(utf8ToBytes(plainText));
+    return bytesToBase64(sm4EcbCrypt(keyStr, padded, true));
+  }
+  function sm4DecryptFromBase64(keyStr, cipherBase64) {
+    const raw = base64ToBytes(cipherBase64);
+    if (raw.length % 16 !== 0) throw new Error("SM4 密文长度非法");
+    return bytesToUtf8(sm4Pkcs7Unpad(sm4EcbCrypt(keyStr, raw, false)));
+  }
+
+  // ========== HseEncAndDecUtil（浏览器移植，decryptResponseMsg） ==========
+  const HseEncAndDecUtil = {
+    CHNL_ID: "",
+    SM4_KEY: "",
+    PRV_KEY: "",
+    PUB_KEY: "",
+    PLAF_PUB_KEY: "",
+    version: "1.0.0",
+    encType: "SM4",
+    signType: "SM2",
+    appId: "",
+    prvkey: "",
+    sm4key: "",
+    pubKey: "",
+    plafPrvkey: "",
+    plafPubKey: "",
+
+    extractEvenPositions(str) {
+      if (!str) return "";
+      let result = "";
+      for (let i = 1; i < str.length; i += 2) {
+        result += str[i];
+      }
+      return result;
+    },
+
+    sm4Decrypt(chnlId, sm4key, data) {
+      const chnlIdPrefix = this.extractEvenPositions(chnlId);
+      if (!chnlIdPrefix || chnlIdPrefix.length < 1) {
+        throw new Error("渠道 ID 派生密钥为空，请检查 CHNL_ID 配置");
+      }
+      // 1) 用渠道偶数位作 key，加密 sm4key → base64
+      const appSecretEncData = sm4EncryptToBase64(chnlIdPrefix, sm4key);
+      // 2) base64→hex 大写，取前 16 字符作最终密钥
+      const decodedEncData = base64ToBytes(appSecretEncData);
+      const hexString = bytesToHex(decodedEncData).toUpperCase();
+      const finalKey = hexString.substring(0, 16);
+      // 3) encData(hex) → base64，再用 finalKey 解密
+      const encryptedBytes = hexToBytes(data);
+      const encryptedBase64 = bytesToBase64(encryptedBytes);
+      return sm4DecryptFromBase64(finalKey, encryptedBase64);
+    },
+
+    decryptResponseMsg(responseMsg) {
+      if (!responseMsg || typeof responseMsg !== "object") {
+        throw new Error("密文对象无效");
+      }
+      const encData = responseMsg.encData;
+      const type = responseMsg.type;
+      const code = responseMsg.code;
+      const message = responseMsg.message;
+      if (!encData || typeof encData !== "string") {
+        throw new Error("缺少 encData 字段");
+      }
+      if (!this.CHNL_ID || !this.SM4_KEY) {
+        throw new Error("请先在菜单中配置 CHNL_ID 与 SM4_KEY");
+      }
+      // 签名验证：当前与工具类一致，SM2 跳过；无专业库时不阻断解密
+      const decryptedJson = this.sm4Decrypt(this.CHNL_ID, this.SM4_KEY, encData);
+      let data;
+      try {
+        data = JSON.parse(decryptedJson);
+      } catch (e) {
+        // 明文非 JSON 时原样返回字符串
+        data = decryptedJson;
+      }
+      return { code: code, message: message, type: type, data: data };
+    },
+  };
+
+  const DECRYPT_CONFIG_STORAGE_KEY = "apiMonitorDecryptConfig";
+  const DEFAULT_DECRYPT_CONFIG = {
+    chnlId: "",
+    sm4Key: "",
+    prvKey: "",
+    pubKey: "",
+    plafPubKey: "",
+    version: "1.0.0",
+    encType: "SM4",
+    signType: "SM2",
+    appId: "",
+  };
+
+  function getDecryptConfig() {
+    try {
+      const raw = GM_getValue(DECRYPT_CONFIG_STORAGE_KEY, "");
+      if (!raw) return Object.assign({}, DEFAULT_DECRYPT_CONFIG);
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return Object.assign({}, DEFAULT_DECRYPT_CONFIG, parsed || {});
+    } catch (e) {
+      return Object.assign({}, DEFAULT_DECRYPT_CONFIG);
+    }
+  }
+
+  function saveDecryptConfig(cfg) {
+    const next = Object.assign({}, DEFAULT_DECRYPT_CONFIG, cfg || {});
+    GM_setValue(DECRYPT_CONFIG_STORAGE_KEY, JSON.stringify(next));
+    applyDecryptConfig(next);
+    return next;
+  }
+
+  function applyDecryptConfig(cfg) {
+    const c = cfg || getDecryptConfig();
+    HseEncAndDecUtil.CHNL_ID = c.chnlId || "";
+    HseEncAndDecUtil.SM4_KEY = c.sm4Key || "";
+    HseEncAndDecUtil.PRV_KEY = c.prvKey || "";
+    HseEncAndDecUtil.PUB_KEY = c.pubKey || "";
+    HseEncAndDecUtil.PLAF_PUB_KEY = c.plafPubKey || "";
+    HseEncAndDecUtil.version = c.version || "1.0.0";
+    HseEncAndDecUtil.encType = c.encType || "SM4";
+    HseEncAndDecUtil.signType = c.signType || "SM2";
+    HseEncAndDecUtil.appId = c.appId || "";
+    HseEncAndDecUtil.prvkey = c.prvKey || "";
+    HseEncAndDecUtil.sm4key = c.sm4Key || "";
+    HseEncAndDecUtil.pubKey = c.pubKey || "";
+    HseEncAndDecUtil.plafPubKey = c.plafPubKey || "";
+  }
+
+  function openDecryptConfigDialog() {
+    const existing = document.getElementById("api-monitor-decrypt-config-overlay");
+    if (existing) existing.remove();
+
+    const cfg = getDecryptConfig();
+    const overlay = document.createElement("div");
+    overlay.id = "api-monitor-decrypt-config-overlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;";
+
+    const panel = document.createElement("div");
+    panel.style.cssText =
+      "width:min(520px,92vw);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:16px 18px;";
+
+    const title = document.createElement("h3");
+    title.textContent = "配置国密解密参数";
+    title.style.cssText = "margin:0 0 12px;font-size:16px;";
+    panel.appendChild(title);
+
+    const hint = document.createElement("div");
+    hint.textContent = "用于解密请求/响应体中的 encData，参数保存在本地（GM 存储）。解密至少需要 CHNL_ID 与 SM4_KEY。";
+    hint.style.cssText = "color:#666;font-size:12px;margin-bottom:12px;line-height:1.5;";
+    panel.appendChild(hint);
+
+    const fields = [
+      { key: "chnlId", label: "CHNL_ID（渠道 ID）", type: "text" },
+      { key: "sm4Key", label: "SM4_KEY", type: "text" },
+      { key: "appId", label: "appId", type: "text" },
+      { key: "prvKey", label: "PRV_KEY（私钥）", type: "text" },
+      { key: "pubKey", label: "PUB_KEY（公钥）", type: "text" },
+      { key: "plafPubKey", label: "PLAF_PUB_KEY（平台公钥）", type: "text" },
+      { key: "version", label: "version", type: "text" },
+      { key: "encType", label: "encType", type: "text" },
+      { key: "signType", label: "signType", type: "text" },
+    ];
+
+    const inputs = {};
+    fields.forEach((f) => {
+      const row = document.createElement("div");
+      row.style.cssText = "margin-bottom:10px;";
+      const lab = document.createElement("label");
+      lab.textContent = f.label;
+      lab.style.cssText = "display:block;font-size:12px;color:#333;margin-bottom:4px;";
+      const input = document.createElement("input");
+      input.type = f.type;
+      input.value = cfg[f.key] != null ? String(cfg[f.key]) : "";
+      input.style.cssText =
+        "width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:monospace;";
+      row.appendChild(lab);
+      row.appendChild(input);
+      panel.appendChild(row);
+      inputs[f.key] = input;
+    });
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:14px;";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "取消";
+    cancelBtn.style.cssText =
+      "padding:6px 14px;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;";
+    cancelBtn.onclick = () => overlay.remove();
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.textContent = "保存";
+    saveBtn.style.cssText =
+      "padding:6px 14px;border:none;border-radius:4px;background:#2196F3;color:#fff;cursor:pointer;";
+    saveBtn.onclick = () => {
+      const next = {};
+      fields.forEach((f) => {
+        next[f.key] = inputs[f.key].value.trim();
+      });
+      if (!next.chnlId || !next.sm4Key) {
+        alert("请至少填写 CHNL_ID 与 SM4_KEY");
+        return;
+      }
+      saveDecryptConfig(next);
+      overlay.remove();
+      alert("解密参数已保存");
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    panel.appendChild(actions);
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.documentElement.appendChild(overlay);
+  }
+
+  function parseBodyObject(body) {
+    if (body == null) return null;
+    if (typeof body === "object") return body;
+    if (typeof body === "string") {
+      try {
+        return JSON.parse(body);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function extractEncPayload(body) {
+    const obj = parseBodyObject(body);
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.encData === "string" && obj.encData.length > 0) return obj;
+    return null;
+  }
 
   // 移除不再需要的全局copyToClipboard函数，已移至monitorWindow对象中
 
@@ -1556,6 +1956,11 @@
     GM_registerMenuCommand("配置监控URL关键字", function () {
       configureMonitorKeywords();
     });
+
+    // 配置国密解密参数（与关键字配置并列）
+    GM_registerMenuCommand("配置解密参数", function () {
+      openDecryptConfigDialog();
+    });
   }
 
   // 切换监控状态 - 根据当前域名保存状态
@@ -2313,11 +2718,14 @@
     return div;
   }
 
-  // 详情区：标题 + 复制按钮 + <pre textContent>
-  // options.collapsed === true 时默认折叠正文，点击标题/箭头展开
+  // 详情区：标题 + 复制按钮 + 可选解密按钮 + <pre textContent>
+  // options.collapsed === true 时默认折叠正文
+  // options.decryptSource 有 encData 时显示解密按钮
   function createDetailPreSection(doc, title, content, options) {
     options = options || {};
     const collapsedByDefault = !!options.collapsed;
+    const decryptSource = options.decryptSource;
+    const canDecrypt = !!(decryptSource && typeof decryptSource.encData === "string");
     const section = doc.createElement("div");
 
     const pre = doc.createElement("pre");
@@ -2334,6 +2742,42 @@
       }
     });
 
+    let decryptBtn = null;
+    if (canDecrypt) {
+      decryptBtn = doc.createElement("button");
+      decryptBtn.className = "copy-btn";
+      decryptBtn.title = "解密 encData";
+      decryptBtn.textContent = "🔓";
+      decryptBtn.style.marginLeft = "4px";
+      let showingDecrypted = false;
+      const originalText = pre.textContent;
+      decryptBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (showingDecrypted) {
+          pre.textContent = originalText;
+          decryptBtn.textContent = "🔓";
+          decryptBtn.title = "解密 encData";
+          showingDecrypted = false;
+          return;
+        }
+        try {
+          applyDecryptConfig(getDecryptConfig());
+          if (!HseEncAndDecUtil.CHNL_ID || !HseEncAndDecUtil.SM4_KEY) {
+            alert("请先通过油猴菜单「配置解密参数」填写 CHNL_ID 与 SM4_KEY");
+            return;
+          }
+          const decrypted = HseEncAndDecUtil.decryptResponseMsg(decryptSource);
+          pre.textContent = JSON.stringify(decrypted, null, 2);
+          decryptBtn.textContent = "🔒";
+          decryptBtn.title = "显示原文";
+          showingDecrypted = true;
+        } catch (err) {
+          console.error("解密失败:", err);
+          alert("解密失败: " + (err && err.message ? err.message : String(err)));
+        }
+      });
+    }
+
     if (!collapsedByDefault) {
       const h4 = doc.createElement("h4");
       h4.style.display = "inline-block";
@@ -2341,6 +2785,7 @@
       h4.textContent = title;
       section.appendChild(h4);
       section.appendChild(copyBtn);
+      if (decryptBtn) section.appendChild(decryptBtn);
       section.appendChild(pre);
       return section;
     }
@@ -2380,6 +2825,7 @@
     header.appendChild(toggle);
     header.appendChild(h4);
     header.appendChild(copyBtn);
+    if (decryptBtn) header.appendChild(decryptBtn);
     section.appendChild(header);
     section.appendChild(pre);
     return section;
@@ -2575,7 +3021,8 @@
     const requestBodySection = createDetailPreSection(
       doc,
       "请求体",
-      requestBodyContent
+      requestBodyContent,
+      { decryptSource: extractEncPayload(request.requestBody) }
     );
 
     // 响应头（默认折叠）
@@ -2607,7 +3054,8 @@
     const responseBodySection = createDetailPreSection(
       doc,
       "响应体",
-      responseBodyContent
+      responseBodyContent,
+      { decryptSource: extractEncPayload(request.responseBody) }
     );
 
     // 清空详情面板并添加新内容
@@ -2782,6 +3230,8 @@
 
     // 恢复保存的监控状态
     restoreMonitoringState();
+    // 加载解密参数到 HseEncAndDecUtil
+    applyDecryptConfig(getDecryptConfig());
     // 初始化菜单
     initializeMenu();
 
