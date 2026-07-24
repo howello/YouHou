@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.0
+// @version      2.8.1
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -453,11 +453,53 @@
     return null;
   }
 
+  /**
+   * 从请求/响应体提取含 encData 的解密载荷。
+   * - 请求体常见：顶层 { encData, signData, ... }
+   * - 响应体常见：{ code, message, type, data: { encData, signData, ... } }
+   * 返回 { payload, envelope }：
+   *   payload  — 传给 decryptResponseMsg 的对象（必须含 encData）
+   *   envelope — 外层包装（若有），解密后用于拼回完整结构展示
+   */
   function extractEncPayload(body) {
     const obj = parseBodyObject(body);
-    if (!obj || typeof obj !== "object") return null;
-    if (typeof obj.encData === "string" && obj.encData.length > 0) return obj;
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+
+    // 1) 顶层 encData（请求体）
+    if (typeof obj.encData === "string" && obj.encData.length > 0) {
+      return { payload: obj, envelope: null };
+    }
+
+    // 2) res.data.encData（响应体）
+    if (
+      obj.data &&
+      typeof obj.data === "object" &&
+      !Array.isArray(obj.data) &&
+      typeof obj.data.encData === "string" &&
+      obj.data.encData.length > 0
+    ) {
+      return { payload: obj.data, envelope: obj };
+    }
+
     return null;
+  }
+
+  function hasEncPayload(source) {
+    return !!(source && source.payload && typeof source.payload.encData === "string");
+  }
+
+  function formatDecryptedDisplay(source, decrypted) {
+    // 嵌套响应：保留外层 code/message/type，data 换成解密结果
+    if (source && source.envelope) {
+      const outer = source.envelope;
+      return {
+        code: outer.code,
+        type: outer.type,
+        message: outer.message,
+        data: decrypted,
+      };
+    }
+    return decrypted;
   }
 
   // 移除不再需要的全局copyToClipboard函数，已移至monitorWindow对象中
@@ -2720,12 +2762,12 @@
 
   // 详情区：标题 + 复制按钮 + 可选解密按钮 + <pre textContent>
   // options.collapsed === true 时默认折叠正文
-  // options.decryptSource 有 encData 时显示解密按钮
+  // options.decryptSource 为 extractEncPayload 结果时显示解密按钮
   function createDetailPreSection(doc, title, content, options) {
     options = options || {};
     const collapsedByDefault = !!options.collapsed;
     const decryptSource = options.decryptSource;
-    const canDecrypt = !!(decryptSource && typeof decryptSource.encData === "string");
+    const canDecrypt = hasEncPayload(decryptSource);
     const section = doc.createElement("div");
 
     const pre = doc.createElement("pre");
@@ -2766,8 +2808,11 @@
             alert("请先通过油猴菜单「配置解密参数」填写 CHNL_ID 与 SM4_KEY");
             return;
           }
-          const decrypted = HseEncAndDecUtil.decryptResponseMsg(decryptSource);
-          pre.textContent = JSON.stringify(decrypted, null, 2);
+          const decrypted = HseEncAndDecUtil.decryptResponseMsg(
+            decryptSource.payload
+          );
+          const displayObj = formatDecryptedDisplay(decryptSource, decrypted);
+          pre.textContent = JSON.stringify(displayObj, null, 2);
           decryptBtn.textContent = "🔒";
           decryptBtn.title = "显示原文";
           showingDecrypted = true;
