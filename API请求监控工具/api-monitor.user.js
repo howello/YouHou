@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.4
+// @version      2.8.5
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -3016,15 +3016,68 @@
     return div;
   }
 
-  // 详情区：标题 + 复制按钮 + 可选解密按钮 + <pre textContent>
+  // 详情 meta 行内单字段（时间/方法/状态/耗时）
+  function createMetaChip(doc, label, value) {
+    const chip = doc.createElement("span");
+    chip.style.cssText =
+      "display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#f3f4f6;border-radius:999px;font-size:12px;color:#374151;white-space:nowrap;";
+    const lab = doc.createElement("span");
+    lab.style.cssText = "color:#6b7280;";
+    lab.textContent = label;
+    const val = doc.createElement("span");
+    val.style.cssText = "font-weight:600;color:#111827;";
+    val.textContent = String(value ?? "");
+    chip.appendChild(lab);
+    chip.appendChild(val);
+    return chip;
+  }
+
+  // 递归按 key 首字母排序（对象键排序；数组保序遍历）
+  function sortObjectKeysDeep(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => sortObjectKeysDeep(item));
+    }
+    if (value && typeof value === "object") {
+      const sorted = {};
+      Object.keys(value)
+        .sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })
+        )
+        .forEach((key) => {
+          sorted[key] = sortObjectKeysDeep(value[key]);
+        });
+      return sorted;
+    }
+    return value;
+  }
+
+  // 尝试将正文解析为 JSON 对象（成功返回 object/array，失败返回 null）
+  function tryParseJsonValue(text) {
+    if (text == null) return null;
+    if (typeof text === "object") return text;
+    if (typeof text !== "string") return null;
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 详情区：标题 + 复制/解密/JSON美化 + <pre>
   // options.collapsed === true 时默认折叠正文
   // options.decryptSource 为 extractEncPayload 结果时显示解密按钮
+  // options.enableBeautify === true 时显示 JSON 美化按钮（格式化 + key 排序）
   function createDetailPreSection(doc, title, content, options) {
     options = options || {};
     const collapsedByDefault = !!options.collapsed;
     const decryptSource = options.decryptSource;
     const canDecrypt = hasEncPayload(decryptSource);
+    const enableBeautify = !!options.enableBeautify;
     const section = doc.createElement("div");
+    section.style.marginTop = "12px";
 
     const pre = doc.createElement("pre");
     pre.textContent = content == null ? "" : String(content);
@@ -3041,21 +3094,72 @@
     });
 
     let decryptBtn = null;
+    let showingDecrypted = false;
+    const initialText = pre.textContent;
+    let baseText = initialText; // 当前“未美化”基准（原文或解密后）
+    let beautified = false;
+    let beforeBeautify = null;
+
+    function setBeautifyUi(active) {
+      beautified = active;
+      if (!beautifyBtn) return;
+      if (active) {
+        beautifyBtn.textContent = "↩";
+        beautifyBtn.title = "还原美化前内容";
+      } else {
+        beautifyBtn.textContent = "{ }";
+        beautifyBtn.title = "JSON 美化（格式化 + 字段首字母排序）";
+      }
+    }
+
+    let beautifyBtn = null;
+    if (enableBeautify) {
+      beautifyBtn = doc.createElement("button");
+      beautifyBtn.className = "copy-btn";
+      beautifyBtn.title = "JSON 美化（格式化 + 字段首字母排序）";
+      beautifyBtn.textContent = "{ }";
+      beautifyBtn.style.marginLeft = "4px";
+      beautifyBtn.style.width = "auto";
+      beautifyBtn.style.minWidth = "30px";
+      beautifyBtn.style.padding = "2px 6px";
+      beautifyBtn.style.fontSize = "11px";
+      beautifyBtn.style.fontFamily = "ui-monospace,Consolas,monospace";
+      beautifyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (beautified) {
+          pre.textContent = beforeBeautify != null ? beforeBeautify : baseText;
+          beforeBeautify = null;
+          setBeautifyUi(false);
+          return;
+        }
+        const parsed = tryParseJsonValue(pre.textContent);
+        if (parsed == null) {
+          alert("当前内容不是有效 JSON，无法美化");
+          return;
+        }
+        beforeBeautify = pre.textContent;
+        const sorted = sortObjectKeysDeep(parsed);
+        pre.textContent = JSON.stringify(sorted, null, 2);
+        setBeautifyUi(true);
+      });
+    }
+
     if (canDecrypt) {
       decryptBtn = doc.createElement("button");
       decryptBtn.className = "copy-btn";
       decryptBtn.title = "解密 encData";
       decryptBtn.textContent = "🔓";
       decryptBtn.style.marginLeft = "4px";
-      let showingDecrypted = false;
-      const originalText = pre.textContent;
       decryptBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (showingDecrypted) {
-          pre.textContent = originalText;
+          pre.textContent = initialText;
+          baseText = initialText;
           decryptBtn.textContent = "🔓";
           decryptBtn.title = "解密 encData";
           showingDecrypted = false;
+          beforeBeautify = null;
+          setBeautifyUi(false);
           return;
         }
         try {
@@ -3068,10 +3172,14 @@
             decryptSource.payload
           );
           const displayObj = formatDecryptedDisplay(decryptSource, decrypted);
-          pre.textContent = JSON.stringify(displayObj, null, 2);
+          const decryptedText = JSON.stringify(displayObj, null, 2);
+          pre.textContent = decryptedText;
+          baseText = decryptedText;
           decryptBtn.textContent = "🔒";
           decryptBtn.title = "显示原文";
           showingDecrypted = true;
+          beforeBeautify = null;
+          setBeautifyUi(false);
         } catch (err) {
           console.error("解密失败:", err);
           alert("解密失败: " + (err && err.message ? err.message : String(err)));
@@ -3079,54 +3187,66 @@
       });
     }
 
+    // 标题行：标题 + 操作按钮 +（折叠时）右侧展开提示
+    const header = doc.createElement("div");
+    header.style.cssText =
+      "display:flex;align-items:center;gap:6px;margin:12px 0 8px;flex-wrap:wrap;";
+
+    const h4 = doc.createElement("h4");
+    h4.style.cssText = "display:inline-block;margin:0;font-size:13px;";
+    h4.textContent = title;
+    header.appendChild(h4);
+    header.appendChild(copyBtn);
+    if (decryptBtn) header.appendChild(decryptBtn);
+    if (beautifyBtn) header.appendChild(beautifyBtn);
+
     if (!collapsedByDefault) {
-      const h4 = doc.createElement("h4");
-      h4.style.display = "inline-block";
-      h4.style.marginRight = "10px";
-      h4.textContent = title;
-      section.appendChild(h4);
-      section.appendChild(copyBtn);
-      if (decryptBtn) section.appendChild(decryptBtn);
+      section.appendChild(header);
       section.appendChild(pre);
       return section;
     }
 
-    const header = doc.createElement("div");
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "6px";
-    header.style.marginTop = "15px";
-    header.style.marginBottom = "8px";
+    // 折叠：标题后放展开标记，不把三角放最前面
     header.style.cursor = "pointer";
     header.title = "点击展开/收起";
+    header.style.userSelect = "none";
+    header.style.padding = "6px 8px";
+    header.style.background = "#f8fafc";
+    header.style.border = "1px solid #eef2f7";
+    header.style.borderRadius = "6px";
+    header.style.marginBottom = "0";
 
     const toggle = doc.createElement("span");
-    toggle.style.userSelect = "none";
-    toggle.style.color = "#666";
-    toggle.style.fontSize = "12px";
-    toggle.style.minWidth = "12px";
-
-    const h4 = doc.createElement("h4");
-    h4.style.display = "inline-block";
-    h4.style.margin = "0 10px 0 0";
-    h4.textContent = title;
+    toggle.style.cssText =
+      "margin-left:auto;color:#6b7280;font-size:12px;display:inline-flex;align-items:center;gap:4px;";
+    const toggleText = doc.createElement("span");
+    toggleText.textContent = "展开";
+    const toggleIcon = doc.createElement("span");
+    toggleIcon.textContent = "▾";
+    toggle.appendChild(toggleText);
+    toggle.appendChild(toggleIcon);
 
     let expanded = false;
     const sync = () => {
-      toggle.textContent = expanded ? "▼" : "▶";
       pre.style.display = expanded ? "" : "none";
+      toggleText.textContent = expanded ? "收起" : "展开";
+      toggleIcon.textContent = expanded ? "▴" : "▾";
+      header.style.borderBottomLeftRadius = expanded ? "0" : "6px";
+      header.style.borderBottomRightRadius = expanded ? "0" : "6px";
+      pre.style.borderTopLeftRadius = "0";
+      pre.style.borderTopRightRadius = "0";
+      pre.style.marginTop = "0";
     };
     sync();
 
-    header.addEventListener("click", () => {
+    header.addEventListener("click", (e) => {
+      // 点击操作按钮不触发展开
+      if (e.target.closest && e.target.closest("button")) return;
       expanded = !expanded;
       sync();
     });
 
     header.appendChild(toggle);
-    header.appendChild(h4);
-    header.appendChild(copyBtn);
-    if (decryptBtn) header.appendChild(decryptBtn);
     section.appendChild(header);
     section.appendChild(pre);
     return section;
@@ -3249,11 +3369,14 @@
 
     const doc = monitorWindow.document;
 
-    // 基本信息（不可信字段一律 textContent / createTextNode）
+    // 基本信息
     const basicInfo = doc.createElement("div");
+
+    const basicTitleRow = doc.createElement("div");
+    basicTitleRow.style.cssText =
+      "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
     const h3 = doc.createElement("h3");
-    h3.style.display = "inline-block";
-    h3.style.marginRight = "10px";
+    h3.style.cssText = "display:inline-block;margin:0;font-size:14px;";
     h3.textContent = "基本信息";
     const basicCopyBtn = doc.createElement("button");
     basicCopyBtn.className = "copy-btn";
@@ -3264,37 +3387,39 @@
         monitorWindow.window.copyToClipboard(basicInfo.textContent);
       }
     });
-    basicInfo.appendChild(h3);
-    basicInfo.appendChild(basicCopyBtn);
-    basicInfo.appendChild(
-      createDetailFieldRow(doc, "时间:", request.timestamp)
-    );
-    basicInfo.appendChild(
-      createDetailFieldRow(doc, "方法:", request.method)
-    );
-    basicInfo.appendChild(createDetailFieldRow(doc, "URL:", request.url));
-    basicInfo.appendChild(
-      createDetailFieldRow(doc, "状态:", request.status)
-    );
-    if (request.duration) {
-      basicInfo.appendChild(
-        createDetailFieldRow(
-          doc,
-          "耗时:",
-          Math.round(request.duration) + "ms"
-        )
-      );
-    }
+    basicTitleRow.appendChild(h3);
+    basicTitleRow.appendChild(basicCopyBtn);
+    basicInfo.appendChild(basicTitleRow);
 
-    // 请求头（默认折叠）
-    const requestHeadersData = request.headers || {};
-    const requestHeadersContent = formatObject(requestHeadersData);
-    const requestHeadersSection = createDetailPreSection(
-      doc,
-      "请求头",
-      requestHeadersContent,
-      { collapsed: true }
+    // 时间 / 方法 / 状态 / 耗时 同一行
+    const metaRow = doc.createElement("div");
+    metaRow.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;";
+    metaRow.appendChild(createMetaChip(doc, "时间", request.timestamp || "-"));
+    metaRow.appendChild(createMetaChip(doc, "方法", request.method || "-"));
+    metaRow.appendChild(
+      createMetaChip(doc, "状态", request.status != null ? request.status : "-")
     );
+    metaRow.appendChild(
+      createMetaChip(
+        doc,
+        "耗时",
+        request.duration ? Math.round(request.duration) + "ms" : "-"
+      )
+    );
+    basicInfo.appendChild(metaRow);
+    basicInfo.appendChild(createDetailFieldRow(doc, "URL:", request.url));
+
+    // Header：请求头 + 响应头合并，默认折叠
+    const headerPayload = {
+      Request: request.headers || {},
+      Response: request.responseHeaders || {},
+    };
+    const headersContent = formatObject(headerPayload);
+    const headersSection = createDetailPreSection(doc, "Header", headersContent, {
+      collapsed: true,
+      enableBeautify: true,
+    });
 
     // 请求体（处理 base64 替换；encData / 纯 hex 不替换）
     let requestBodyContent = formatRequestBody(request.requestBody);
@@ -3315,18 +3440,10 @@
       doc,
       "请求体",
       requestBodyContent,
-      { decryptSource: extractEncPayload(request.requestBody) }
-    );
-
-    // 响应头（默认折叠）
-    const responseHeadersContent = request.responseHeaders
-      ? formatObject(request.responseHeaders)
-      : "N/A";
-    const responseHeadersSection = createDetailPreSection(
-      doc,
-      "响应头",
-      responseHeadersContent,
-      { collapsed: true }
+      {
+        decryptSource: extractEncPayload(request.requestBody),
+        enableBeautify: true,
+      }
     );
 
     // 响应体（处理 base64 替换；encData / 纯 hex 不替换）
@@ -3348,7 +3465,10 @@
       doc,
       "响应体",
       responseBodyContent,
-      { decryptSource: extractEncPayload(request.responseBody) }
+      {
+        decryptSource: extractEncPayload(request.responseBody),
+        enableBeautify: true,
+      }
     );
 
     // 清空详情内容，保留工具栏与回到顶部按钮
@@ -3390,7 +3510,7 @@
 
     // 添加到详情面板
     detailPanel.appendChild(basicInfo);
-    detailPanel.appendChild(requestHeadersSection);
+    detailPanel.appendChild(headersSection);
     detailPanel.appendChild(requestBodySection);
 
     // 检测并添加 base64 下载按钮
@@ -3414,7 +3534,6 @@
       console.error("检测 base64 失败:", e);
     }
 
-    detailPanel.appendChild(responseHeadersSection);
     detailPanel.appendChild(responseBodySection);
 
     // 检测并添加响应体的 base64 下载按钮
