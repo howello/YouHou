@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.5
+// @version      2.8.6
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -1249,20 +1249,18 @@
             padding: 10px 14px;
             border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
-            transition: background-color 0.12s;
-          }
-          .api-request-item .meta-row {
             display: flex;
             align-items: center;
             gap: 6px;
-            flex-wrap: wrap;
-            margin-bottom: 4px;
+            transition: background-color 0.12s;
+            min-width: 0;
           }
           .api-request-item .time-column {
             color: #6b7280;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
             flex-shrink: 0;
+            width: 148px;
           }
           .api-request-item:hover {
             background-color: #f3f4f6;
@@ -1292,28 +1290,30 @@
             color: #4b5563;
             font-size: 12px;
             white-space: nowrap;
+            flex-shrink: 0;
           }
           .url-text {
-            display: block;
-            width: 100%;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             font-family: ui-monospace, Consolas, monospace;
             font-size: 12px;
-            line-height: 1.45;
-            word-break: break-all;
-            white-space: normal;
             color: #111827;
           }
           .duration-text {
-            margin-left: auto;
             color: #6b7280;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
             flex-shrink: 0;
+            white-space: nowrap;
           }
+          /* 遮罩仅轻微变暗，且不拦截列表点击，便于直接切换请求 */
           #api-detail-mask {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.35);
+            background: rgba(15, 23, 42, 0.08);
             z-index: 2000;
             opacity: 0;
             pointer-events: none;
@@ -1321,7 +1321,7 @@
           }
           #api-detail-mask.open {
             opacity: 1;
-            pointer-events: auto;
+            pointer-events: none;
           }
           #api-detail-panel {
             position: fixed;
@@ -1686,14 +1686,6 @@
           closeDetailDrawer();
         });
       }
-      // 遮罩点击关闭（主动关闭，非自动）
-      const detailMask = monitorWindow.document.getElementById("api-detail-mask");
-      if (detailMask) {
-        detailMask.addEventListener("click", () => {
-          closeDetailDrawer();
-        });
-      }
-
       // 回到顶部按钮
       const backToTopBtn =
         monitorWindow.document.getElementById("back-to-top-btn");
@@ -2578,7 +2570,7 @@
     }
   }
 
-  // 构建单个请求列表项 DOM（含状态色与当前打开项高亮）
+  // 构建单个请求列表项 DOM（单行：状态 时间 方法 URL 状态码 耗时）
   function buildRequestListItem(request) {
     const item = monitorWindow.document.createElement("div");
     item.className = "api-request-item";
@@ -2599,10 +2591,6 @@
       item.style.backgroundColor = "#e8f5e9";
     }
 
-    // 第一行：状态 / 时间 / 方法 / 状态码 / 耗时
-    const metaRow = monitorWindow.document.createElement("div");
-    metaRow.className = "meta-row";
-
     const statusIcon = monitorWindow.document.createElement("span");
     if (request.status === "ERROR") {
       statusIcon.textContent = "❌";
@@ -2622,39 +2610,37 @@
       statusIcon.title = "进行中";
     }
     statusIcon.style.flexShrink = "0";
-    metaRow.appendChild(statusIcon);
+    item.appendChild(statusIcon);
 
     const timeColumn = monitorWindow.document.createElement("span");
     timeColumn.className = "time-column";
     timeColumn.textContent = request.timestamp;
-    metaRow.appendChild(timeColumn);
+    item.appendChild(timeColumn);
 
     const method = String(request.method || "GET").toUpperCase();
     const methodBadge = monitorWindow.document.createElement("span");
     methodBadge.className = "method-badge " + method.toLowerCase();
     methodBadge.textContent = method;
-    metaRow.appendChild(methodBadge);
+    item.appendChild(methodBadge);
+
+    const urlSpan = monitorWindow.document.createElement("span");
+    urlSpan.className = "url-text";
+    urlSpan.textContent = getDisplayUrl(request.url);
+    urlSpan.title = typeof request.url === "string" ? request.url : "";
+    item.appendChild(urlSpan);
 
     const statusText = monitorWindow.document.createElement("span");
     statusText.className = "status-text";
     statusText.textContent = String(request.status || "PENDING");
-    metaRow.appendChild(statusText);
+    item.appendChild(statusText);
 
+    // 耗时紧跟 URL/状态后，不推到行末
     const durationSpan = monitorWindow.document.createElement("span");
     durationSpan.className = "duration-text";
     durationSpan.textContent = request.duration
       ? Math.round(request.duration) + "ms"
       : "";
-    metaRow.appendChild(durationSpan);
-
-    // 第二行：完整 URL（自动换行，不截断）
-    const urlSpan = monitorWindow.document.createElement("div");
-    urlSpan.className = "url-text";
-    urlSpan.textContent = getDisplayUrl(request.url);
-    urlSpan.title = typeof request.url === "string" ? request.url : "";
-
-    item.appendChild(metaRow);
-    item.appendChild(urlSpan);
+    item.appendChild(durationSpan);
 
     item.addEventListener("click", () => {
       showRequestDetails(request);
