@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.3
+// @version      2.8.4
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -1229,7 +1229,7 @@
             color: #333;
             border-color: #bbb;
           }
-          #api-split {
+          #api-panel {
             display: flex;
             flex: 1;
             min-height: 0;
@@ -1240,36 +1240,35 @@
             overflow: hidden;
           }
           #api-request-list {
-            width: 42%;
-            min-width: 280px;
+            width: 100%;
             height: 100%;
             overflow-y: auto;
-            border-right: 1px solid #e5e7eb;
             background: #fff;
           }
           .api-request-item {
-            padding: 10px 12px;
+            padding: 10px 14px;
             border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             transition: background-color 0.12s;
           }
+          .api-request-item .meta-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+          }
           .api-request-item .time-column {
-            width: 148px;
-            flex-shrink: 0;
-            margin-right: 10px;
             color: #6b7280;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
           }
           .api-request-item:hover {
             background-color: #f3f4f6;
           }
           .api-request-item.is-selected {
-            background-color: #bbdefb !important;
-            font-weight: 600;
+            background-color: #e3f2fd !important;
             box-shadow: inset 3px 0 0 #2196F3;
           }
           .method-badge {
@@ -1277,7 +1276,6 @@
             min-width: 42px;
             text-align: center;
             padding: 1px 6px;
-            margin-right: 6px;
             border-radius: 4px;
             font-size: 11px;
             font-weight: 700;
@@ -1293,38 +1291,72 @@
           .status-text {
             color: #4b5563;
             font-size: 12px;
-            margin-left: 4px;
             white-space: nowrap;
           }
           .url-text {
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            display: block;
+            width: 100%;
             font-family: ui-monospace, Consolas, monospace;
             font-size: 12px;
+            line-height: 1.45;
+            word-break: break-all;
+            white-space: normal;
+            color: #111827;
           }
           .duration-text {
-            margin-left: 10px;
+            margin-left: auto;
             color: #6b7280;
             font-size: 12px;
             font-variant-numeric: tabular-nums;
             flex-shrink: 0;
           }
+          #api-detail-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.35);
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+          }
+          #api-detail-mask.open {
+            opacity: 1;
+            pointer-events: auto;
+          }
           #api-detail-panel {
-            width: 58%;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: min(640px, 92vw);
             height: 100%;
             overflow-y: auto;
-            padding: 12px 14px;
-            display: none;
-            position: relative;
+            padding: 12px 14px 24px;
             background: #fff;
+            z-index: 2001;
+            box-shadow: -8px 0 28px rgba(15, 23, 42, 0.18);
+            transform: translateX(100%);
+            transition: transform 0.24s ease;
+            will-change: transform;
+          }
+          #api-detail-panel.open {
+            transform: translateX(0);
           }
           #api-detail-panel .detail-toolbar {
             display: flex;
-            justify-content: flex-end;
-            margin-bottom: 8px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            position: sticky;
+            top: -12px;
+            background: #fff;
+            padding: 4px 0 8px;
+            z-index: 2;
+            border-bottom: 1px solid #f0f0f0;
+          }
+          #api-detail-panel .detail-toolbar-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
           }
           #console-panel {
             flex: 1;
@@ -1511,14 +1543,8 @@
           <div class="tab" id="cookie-tab">Cookie</div>
         </div>
         <div class="main-content">
-          <div id="api-split">
+          <div id="api-panel">
             <div id="api-request-list"></div>
-            <div id="api-detail-panel">
-              <div class="detail-toolbar">
-                <button id="close-detail-button" class="btn-close">关闭详情</button>
-              </div>
-              <button id="back-to-top-btn" title="回到顶部">↑</button>
-            </div>
           </div>
           <div id="console-panel"></div>
           <div id="localstorage-panel" class="storage-panel">
@@ -1542,6 +1568,14 @@
             </div>
             <div id="cookie-content" class="storage-body"></div>
           </div>
+        </div>
+        <div id="api-detail-mask"></div>
+        <div id="api-detail-panel">
+          <div class="detail-toolbar">
+            <span class="detail-toolbar-title">请求详情</span>
+            <button id="close-detail-button" class="btn-close">关闭</button>
+          </div>
+          <button id="back-to-top-btn" title="回到顶部">↑</button>
         </div>
       </body>
       </html>
@@ -1643,20 +1677,20 @@
         });
       }
 
-      // 关闭详情按钮
+      // 关闭详情抽屉
       const closeDetailBtn = monitorWindow.document.getElementById(
         "close-detail-button"
       );
       if (closeDetailBtn) {
         closeDetailBtn.addEventListener("click", () => {
-          currentlyOpenRequestId = null;
-          // 更新请求列表以移除高亮
-          updateRequestList();
-          const detailPanel =
-            monitorWindow.document.getElementById("api-detail-panel");
-          if (detailPanel) {
-            detailPanel.style.display = "none";
-          }
+          closeDetailDrawer();
+        });
+      }
+      // 遮罩点击关闭（主动关闭，非自动）
+      const detailMask = monitorWindow.document.getElementById("api-detail-mask");
+      if (detailMask) {
+        detailMask.addEventListener("click", () => {
+          closeDetailDrawer();
         });
       }
 
@@ -1680,20 +1714,26 @@
         });
       }
 
-      // API 请求 Tab：↑/↓ 切换选中请求
+      // API 请求 Tab：↑/↓ 切换选中请求；Esc 关闭抽屉
       monitorWindow.document.addEventListener("keydown", (e) => {
-        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-
         const activeEl = monitorWindow.document.activeElement;
         const tag = activeEl && activeEl.tagName ? activeEl.tagName.toUpperCase() : "";
-        if (
+        const typing =
           tag === "INPUT" ||
           tag === "TEXTAREA" ||
           tag === "SELECT" ||
-          (activeEl && activeEl.isContentEditable)
-        ) {
+          (activeEl && activeEl.isContentEditable);
+
+        if (e.key === "Escape" && !typing) {
+          if (currentlyOpenRequestId != null) {
+            e.preventDefault();
+            closeDetailDrawer();
+          }
           return;
         }
+
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        if (typing) return;
 
         const apiTabEl = monitorWindow.document.getElementById("api-tab");
         if (!apiTabEl || !apiTabEl.classList.contains("active")) return;
@@ -1825,6 +1865,28 @@
     updateConsoleLogs();
   }
 
+  // 打开/关闭请求详情抽屉（从右向左）
+  function openDetailDrawer() {
+    if (!monitorWindow || monitorWindow.closed) return;
+    const panel = monitorWindow.document.getElementById("api-detail-panel");
+    const mask = monitorWindow.document.getElementById("api-detail-mask");
+    if (panel) panel.classList.add("open");
+    if (mask) mask.classList.add("open");
+  }
+
+  function closeDetailDrawer() {
+    if (!monitorWindow || monitorWindow.closed) {
+      currentlyOpenRequestId = null;
+      return;
+    }
+    const panel = monitorWindow.document.getElementById("api-detail-panel");
+    const mask = monitorWindow.document.getElementById("api-detail-mask");
+    if (panel) panel.classList.remove("open");
+    if (mask) mask.classList.remove("open");
+    currentlyOpenRequestId = null;
+    updateRequestList();
+  }
+
   // 切换标签页 - 暴露到window对象上以便监控窗口访问
   function switchTab(tabName) {
     if (!monitorWindow || monitorWindow.closed) return;
@@ -1838,7 +1900,6 @@
     const cookieTab = monitorWindow.document.getElementById("cookie-tab");
 
     const apiList = monitorWindow.document.getElementById("api-request-list");
-    const apiDetail = monitorWindow.document.getElementById("api-detail-panel");
     const consolePanel = monitorWindow.document.getElementById("console-panel");
     const localStoragePanel =
       monitorWindow.document.getElementById("localstorage-panel");
@@ -1846,7 +1907,7 @@
       "sessionstorage-panel"
     );
     const cookiePanel = monitorWindow.document.getElementById("cookie-panel");
-    const flexContainer = apiList.parentElement;
+    const apiPanel = apiList ? apiList.parentElement : null;
 
     // 重置所有标签和面板
     apiTab.classList.remove("active");
@@ -1856,7 +1917,7 @@
     cookieTab.classList.remove("active");
 
     // 隐藏所有面板
-    flexContainer.style.display = "none";
+    if (apiPanel) apiPanel.style.display = "none";
     consolePanel.style.display = "none";
     localStoragePanel.style.display = "none";
     sessionStoragePanel.style.display = "none";
@@ -1865,8 +1926,7 @@
     // 根据标签名显示对应内容
     if (tabName === "api") {
       apiTab.classList.add("active");
-      // 显示 flex 容器，包含 apiList 和 apiDetail
-      flexContainer.style.display = "flex";
+      if (apiPanel) apiPanel.style.display = "flex";
     } else if (tabName === "console") {
       consoleTab.classList.add("active");
       consolePanel.style.display = "block";
@@ -2539,12 +2599,9 @@
       item.style.backgroundColor = "#e8f5e9";
     }
 
-    const contentContainer = monitorWindow.document.createElement("div");
-    contentContainer.style.display = "flex";
-    contentContainer.style.alignItems = "center";
-    contentContainer.style.width = "100%";
-    contentContainer.style.minWidth = "0";
-    contentContainer.style.gap = "4px";
+    // 第一行：状态 / 时间 / 方法 / 状态码 / 耗时
+    const metaRow = monitorWindow.document.createElement("div");
+    metaRow.className = "meta-row";
 
     const statusIcon = monitorWindow.document.createElement("span");
     if (request.status === "ERROR") {
@@ -2565,38 +2622,39 @@
       statusIcon.title = "进行中";
     }
     statusIcon.style.flexShrink = "0";
-    contentContainer.appendChild(statusIcon);
+    metaRow.appendChild(statusIcon);
 
     const timeColumn = monitorWindow.document.createElement("span");
     timeColumn.className = "time-column";
     timeColumn.textContent = request.timestamp;
-    contentContainer.appendChild(timeColumn);
+    metaRow.appendChild(timeColumn);
 
     const method = String(request.method || "GET").toUpperCase();
     const methodBadge = monitorWindow.document.createElement("span");
     methodBadge.className = "method-badge " + method.toLowerCase();
     methodBadge.textContent = method;
-    contentContainer.appendChild(methodBadge);
-
-    const urlSpan = monitorWindow.document.createElement("span");
-    urlSpan.className = "url-text";
-    urlSpan.textContent = getShortUrl(request.url);
-    urlSpan.title = request.url;
-    contentContainer.appendChild(urlSpan);
+    metaRow.appendChild(methodBadge);
 
     const statusText = monitorWindow.document.createElement("span");
     statusText.className = "status-text";
     statusText.textContent = String(request.status || "PENDING");
-    contentContainer.appendChild(statusText);
+    metaRow.appendChild(statusText);
 
     const durationSpan = monitorWindow.document.createElement("span");
     durationSpan.className = "duration-text";
     durationSpan.textContent = request.duration
       ? Math.round(request.duration) + "ms"
       : "";
-    contentContainer.appendChild(durationSpan);
+    metaRow.appendChild(durationSpan);
 
-    item.appendChild(contentContainer);
+    // 第二行：完整 URL（自动换行，不截断）
+    const urlSpan = monitorWindow.document.createElement("div");
+    urlSpan.className = "url-text";
+    urlSpan.textContent = getDisplayUrl(request.url);
+    urlSpan.title = typeof request.url === "string" ? request.url : "";
+
+    item.appendChild(metaRow);
+    item.appendChild(urlSpan);
 
     item.addEventListener("click", () => {
       showRequestDetails(request);
@@ -2638,25 +2696,20 @@
     }
   }
 
-  function getShortUrl(url) {
+  // 列表展示 URL：从命中的监控关键字起显示完整路径，不截断（自动换行）
+  function getDisplayUrl(url) {
     if (typeof url !== "string") return "";
-    let start = 0;
-    let found = false;
     if (monitorKeywords.length > 0) {
-      let best = url.length;
+      let best = -1;
       for (const keyword of monitorKeywords) {
         const index = url.indexOf(keyword);
-        if (index !== -1 && index < best) {
+        if (index !== -1 && (best === -1 || index < best)) {
           best = index;
-          found = true;
         }
       }
-      if (found) start = best;
+      if (best !== -1) return url.substring(best);
     }
-    let displayUrl = found ? url.substring(start) : url;
-    const MAX = 120;
-    if (displayUrl.length > MAX) displayUrl = displayUrl.slice(0, MAX) + "…";
-    return displayUrl;
+    return url;
   }
 
   // 检测 base64 字符串并创建下载按钮
@@ -3174,9 +3227,8 @@
     scrollRequestItemIntoView(target.id);
   }
 
-  // 显示请求详情
+  // 显示请求详情（右侧抽屉，再次点击同一项不关闭）
   function showRequestDetails(request) {
-    // 检查监控窗口是否存在且未关闭
     if (!monitorWindow || monitorWindow.closed) {
       return;
     }
@@ -3185,21 +3237,14 @@
       monitorWindow.document.getElementById("api-detail-panel");
     if (!detailPanel) return;
 
-    // 显示详情面板
-    detailPanel.style.display = "block";
-
-    // 如果点击的是当前已打开的请求，则隐藏详情面板
+    // 同一项：保持打开，仅确保抽屉可见并滚动定位
     if (currentlyOpenRequestId === request.id) {
-      currentlyOpenRequestId = null;
-      detailPanel.style.display = "none";
-      // 更新请求列表以移除高亮
-      updateRequestList();
+      openDetailDrawer();
+      scrollRequestItemIntoView(request.id);
       return;
     }
 
-    // 更新当前打开的请求ID
     currentlyOpenRequestId = request.id;
-    // 更新请求列表以显示高亮
     updateRequestList();
 
     const doc = monitorWindow.document;
@@ -3209,7 +3254,7 @@
     const h3 = doc.createElement("h3");
     h3.style.display = "inline-block";
     h3.style.marginRight = "10px";
-    h3.textContent = "请求详情";
+    h3.textContent = "基本信息";
     const basicCopyBtn = doc.createElement("button");
     basicCopyBtn.className = "copy-btn";
     basicCopyBtn.title = "复制";
@@ -3310,6 +3355,7 @@
     const detailToolbar = detailPanel.querySelector(".detail-toolbar");
     const closeButton = detailPanel.querySelector("#close-detail-button");
     const backToTopBtn = detailPanel.querySelector("#back-to-top-btn");
+    const toolbarTitle = detailPanel.querySelector(".detail-toolbar-title");
     detailPanel.innerHTML = "";
 
     let toolbar = detailToolbar;
@@ -3317,17 +3363,23 @@
       toolbar = doc.createElement("div");
       toolbar.className = "detail-toolbar";
     }
+    if (toolbarTitle && !toolbar.contains(toolbarTitle)) {
+      toolbar.insertBefore(toolbarTitle, toolbar.firstChild);
+    } else if (!toolbar.querySelector(".detail-toolbar-title")) {
+      const titleEl = doc.createElement("span");
+      titleEl.className = "detail-toolbar-title";
+      titleEl.textContent = "请求详情";
+      toolbar.insertBefore(titleEl, toolbar.firstChild);
+    }
     if (closeButton && !toolbar.contains(closeButton)) {
       toolbar.appendChild(closeButton);
     } else if (!closeButton) {
       const btn = doc.createElement("button");
       btn.id = "close-detail-button";
       btn.className = "btn-close";
-      btn.textContent = "关闭详情";
+      btn.textContent = "关闭";
       btn.addEventListener("click", () => {
-        currentlyOpenRequestId = null;
-        detailPanel.style.display = "none";
-        updateRequestList();
+        closeDetailDrawer();
       });
       toolbar.appendChild(btn);
     }
@@ -3386,8 +3438,9 @@
       console.error("检测响应体 base64 失败:", e);
     }
 
-    // 滚动到顶部
+    // 滚动到顶部并打开抽屉
     detailPanel.scrollTop = 0;
+    openDetailDrawer();
   }
 
   // 格式化对象为字符串
@@ -3459,19 +3512,8 @@
     updateRequestList();
     updateConsoleLogs(); // 更新控制台日志显示
 
-    // 如果详情面板显示，则隐藏它
-    if (monitorWindow && !monitorWindow.closed) {
-      const detailPanel =
-        monitorWindow.document.getElementById("api-detail-panel");
-      if (detailPanel) {
-        detailPanel.style.display = "none";
-      }
-    }
-
-    // 重置当前打开的请求ID
-    currentlyOpenRequestId = null;
-    // 更新请求列表以移除高亮
-    updateRequestList();
+    // 关闭详情抽屉并重置选中
+    closeDetailDrawer();
   }
 
   // 确保在DOM加载完成后初始化
