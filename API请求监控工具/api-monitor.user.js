@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.7
+// @version      2.7.1
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -1005,6 +1005,28 @@
           }
         });
       }
+
+      // API 请求 Tab：↑/↓ 切换选中请求
+      monitorWindow.document.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+        const activeEl = monitorWindow.document.activeElement;
+        const tag = activeEl && activeEl.tagName ? activeEl.tagName.toUpperCase() : "";
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          (activeEl && activeEl.isContentEditable)
+        ) {
+          return;
+        }
+
+        const apiTabEl = monitorWindow.document.getElementById("api-tab");
+        if (!apiTabEl || !apiTabEl.classList.contains("active")) return;
+
+        e.preventDefault();
+        navigateRequestByArrow(e.key === "ArrowUp" ? "up" : "down");
+      });
     };
 
     // 如果文档已经加载完成，立即执行；否则等待 DOMContentLoaded
@@ -1193,15 +1215,56 @@
   // 将switchTab函数暴露到window对象上
   window.switchTab = switchTab;
 
-  // 创建 KV 值展示节点（对象 pretty JSON，其它 String）
+  // 创建 KV 值展示节点（对象 pretty JSON，其它 String；超过 3 行默认折叠）
+  const STORAGE_VALUE_COLLAPSE_LINES = 3;
+
   function createExpandableValue(monitorWindow, value) {
     const isObject = value && typeof value === "object";
     const fullValueText = isObject ? JSON.stringify(value, null, 2) : String(value);
+    const lines = fullValueText.split("\n");
+    const needsCollapse = lines.length > STORAGE_VALUE_COLLAPSE_LINES;
+
+    const wrapper = monitorWindow.document.createElement("div");
     const pre = monitorWindow.document.createElement("pre");
-    pre.textContent = fullValueText;
     pre.style.cssText =
       "margin:0;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:12px;";
-    return pre;
+
+    if (!needsCollapse) {
+      pre.textContent = fullValueText;
+      wrapper.appendChild(pre);
+      return wrapper;
+    }
+
+    const collapsedText =
+      lines.slice(0, STORAGE_VALUE_COLLAPSE_LINES).join("\n") + "\n…";
+    let expanded = false;
+    pre.textContent = collapsedText;
+    pre.style.cursor = "pointer";
+    pre.title = "点击展开/收起";
+
+    const toggleBtn = monitorWindow.document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.textContent = "展开全部";
+    toggleBtn.style.cssText =
+      "margin-top:4px;padding:2px 8px;font-size:12px;border:1px solid #ddd;border-radius:4px;background:#f5f5f5;color:#333;cursor:pointer;";
+
+    const sync = () => {
+      pre.textContent = expanded ? fullValueText : collapsedText;
+      toggleBtn.textContent = expanded ? "收起" : "展开全部";
+    };
+
+    const toggle = (e) => {
+      if (e) e.stopPropagation();
+      expanded = !expanded;
+      sync();
+    };
+
+    pre.addEventListener("click", toggle);
+    toggleBtn.addEventListener("click", toggle);
+
+    wrapper.appendChild(pre);
+    wrapper.appendChild(toggleBtn);
+    return wrapper;
   }
 
   // 公共 KV 表格渲染（LocalStorage / SessionStorage / Cookie 共用）
@@ -2011,9 +2074,11 @@
             fileType = getFileExtension(mimeType);
           }
         }
-        // 检测纯 base64 字符串：长度门槛 → magic 前缀优先 → 全量 regex
+        // 检测纯 base64 字符串：长度门槛 → 跳过纯 hex → magic 前缀优先 → 全量 regex
         else {
           if (obj.length < BASE64_MIN_LEN) return;
+          // 纯十六进制密文（如部分 encData）不是可下载文件
+          if (/^[0-9A-Fa-f]+$/.test(obj)) return;
 
           let magicMatched = false;
           try {
@@ -2249,12 +2314,11 @@
   }
 
   // 详情区：标题 + 复制按钮 + <pre textContent>
-  function createDetailPreSection(doc, title, content) {
+  // options.collapsed === true 时默认折叠正文，点击标题/箭头展开
+  function createDetailPreSection(doc, title, content, options) {
+    options = options || {};
+    const collapsedByDefault = !!options.collapsed;
     const section = doc.createElement("div");
-    const h4 = doc.createElement("h4");
-    h4.style.display = "inline-block";
-    h4.style.marginRight = "10px";
-    h4.textContent = title;
 
     const pre = doc.createElement("pre");
     pre.textContent = content == null ? "" : String(content);
@@ -2263,16 +2327,157 @@
     copyBtn.className = "copy-btn";
     copyBtn.title = "复制";
     copyBtn.textContent = "📄";
-    copyBtn.addEventListener("click", () => {
+    copyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (monitorWindow && !monitorWindow.closed && monitorWindow.window.copyToClipboard) {
         monitorWindow.window.copyToClipboard(pre.textContent);
       }
     });
 
-    section.appendChild(h4);
-    section.appendChild(copyBtn);
+    if (!collapsedByDefault) {
+      const h4 = doc.createElement("h4");
+      h4.style.display = "inline-block";
+      h4.style.marginRight = "10px";
+      h4.textContent = title;
+      section.appendChild(h4);
+      section.appendChild(copyBtn);
+      section.appendChild(pre);
+      return section;
+    }
+
+    const header = doc.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "6px";
+    header.style.marginTop = "15px";
+    header.style.marginBottom = "8px";
+    header.style.cursor = "pointer";
+    header.title = "点击展开/收起";
+
+    const toggle = doc.createElement("span");
+    toggle.style.userSelect = "none";
+    toggle.style.color = "#666";
+    toggle.style.fontSize = "12px";
+    toggle.style.minWidth = "12px";
+
+    const h4 = doc.createElement("h4");
+    h4.style.display = "inline-block";
+    h4.style.margin = "0 10px 0 0";
+    h4.textContent = title;
+
+    let expanded = false;
+    const sync = () => {
+      toggle.textContent = expanded ? "▼" : "▶";
+      pre.style.display = expanded ? "" : "none";
+    };
+    sync();
+
+    header.addEventListener("click", () => {
+      expanded = !expanded;
+      sync();
+    });
+
+    header.appendChild(toggle);
+    header.appendChild(h4);
+    header.appendChild(copyBtn);
+    section.appendChild(header);
     section.appendChild(pre);
     return section;
+  }
+
+  // 是否为加密字段路径（encData 原样展示，不替换为 Base64 占位）
+  function isEncDataPath(path) {
+    if (!path) return false;
+    return (
+      path === "encData" ||
+      path.endsWith(".encData") ||
+      path.includes(".encData.") ||
+      path.includes(".encData[")
+    );
+  }
+
+  // 是否像文件 Base64（排除纯十六进制密文，避免误标 encData 类字段）
+  function looksLikeBase64File(str) {
+    if (typeof str !== "string") return false;
+    if (str.startsWith("data:")) return true;
+    if (str.length <= 100) return false;
+    // 纯 hex 通常是加密载荷，不是可下载文件
+    if (/^[0-9A-Fa-f]+$/.test(str)) return false;
+    return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      str
+    );
+  }
+
+  // 详情展示用：递归替换文件 Base64 为占位符（请求体/响应体共用）
+  function replaceBase64InDisplayObject(obj, path) {
+    path = path || "";
+    if (typeof obj === "string") {
+      if (isEncDataPath(path)) return obj;
+      if (looksLikeBase64File(obj)) return "[Base64 文件]";
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((item, index) =>
+        replaceBase64InDisplayObject(
+          item,
+          path ? path + "[" + index + "]" : "[" + index + "]"
+        )
+      );
+    }
+    if (typeof obj === "object" && obj !== null) {
+      const newObj = {};
+      for (const key in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+        if (key === "encData") {
+          newObj[key] = obj[key];
+          continue;
+        }
+        const newPath = path ? path + "." + key : key;
+        newObj[key] = replaceBase64InDisplayObject(obj[key], newPath);
+      }
+      return newObj;
+    }
+    return obj;
+  }
+
+  // API 列表 ↑/↓ 导航
+  function scrollRequestItemIntoView(requestId) {
+    if (!monitorWindow || monitorWindow.closed) return;
+    const listContainer =
+      monitorWindow.document.getElementById("api-request-list");
+    if (!listContainer) return;
+    const item = listContainer.querySelector(
+      '[data-request-id="' + String(requestId) + '"]'
+    );
+    if (item && typeof item.scrollIntoView === "function") {
+      item.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function navigateRequestByArrow(direction) {
+    if (!monitorWindow || monitorWindow.closed) return;
+    const list = requestHistory.slice(0, REQUEST_LIST_VIEW_MAX);
+    if (list.length === 0) return;
+
+    let idx = list.findIndex((r) => r.id === currentlyOpenRequestId);
+    if (idx === -1) {
+      idx = 0;
+    } else if (direction === "up") {
+      idx = Math.max(0, idx - 1);
+    } else {
+      idx = Math.min(list.length - 1, idx + 1);
+    }
+
+    const target = list[idx];
+    if (!target) return;
+
+    // 已选中同一项时不 toggle 关闭，仅滚动定位
+    if (currentlyOpenRequestId === target.id) {
+      scrollRequestItemIntoView(target.id);
+      return;
+    }
+    showRequestDetails(target);
+    scrollRequestItemIntoView(target.id);
   }
 
   // 显示请求详情
@@ -2342,19 +2547,18 @@
       );
     }
 
-    // 请求头
+    // 请求头（默认折叠）
     const requestHeadersData = request.headers || {};
     const requestHeadersContent = formatObject(requestHeadersData);
     const requestHeadersSection = createDetailPreSection(
       doc,
       "请求头",
-      requestHeadersContent
+      requestHeadersContent,
+      { collapsed: true }
     );
 
-    // 请求体（处理 base64 替换）
+    // 请求体（处理 base64 替换；encData / 纯 hex 不替换）
     let requestBodyContent = formatRequestBody(request.requestBody);
-
-    // 尝试替换 base64 为文件占位符
     let requestData = request.requestBody;
     if (typeof requestData === "string") {
       try {
@@ -2363,37 +2567,8 @@
         // 如果不是 JSON，就保持原样
       }
     }
-
-    // 递归替换 base64 字符串
-    function replaceBase64InRequestObject(obj) {
-      if (typeof obj === "string") {
-        // 检测 Data URL 或长 base64
-        if (
-          obj.startsWith("data:") ||
-          (obj.length > 100 &&
-            /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(
-              obj
-            ))
-        ) {
-          return "[Base64 文件]";
-        }
-        return obj;
-      } else if (Array.isArray(obj)) {
-        return obj.map((item) => replaceBase64InRequestObject(item));
-      } else if (typeof obj === "object" && obj !== null) {
-        const newObj = {};
-        for (const key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            newObj[key] = replaceBase64InRequestObject(obj[key]);
-          }
-        }
-        return newObj;
-      }
-      return obj;
-    }
-
     if (requestData && typeof requestData === "object") {
-      const replacedData = replaceBase64InRequestObject(requestData);
+      const replacedData = replaceBase64InDisplayObject(requestData);
       requestBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
@@ -2403,20 +2578,19 @@
       requestBodyContent
     );
 
-    // 响应头
+    // 响应头（默认折叠）
     const responseHeadersContent = request.responseHeaders
       ? formatObject(request.responseHeaders)
       : "N/A";
     const responseHeadersSection = createDetailPreSection(
       doc,
       "响应头",
-      responseHeadersContent
+      responseHeadersContent,
+      { collapsed: true }
     );
 
-    // 响应体（处理 base64 替换）
+    // 响应体（处理 base64 替换；encData / 纯 hex 不替换）
     let responseBodyContent = formatResponseBody(request.responseBody);
-
-    // 尝试替换响应体中的 base64 为文件占位符
     let responseData = request.responseBody;
     if (typeof responseData === "string") {
       try {
@@ -2425,43 +2599,8 @@
         // 如果不是 JSON，就保持原样
       }
     }
-
-    // 递归替换 base64 字符串
-    function replaceBase64InObject(obj, path = "") {
-      if (typeof obj === "string") {
-        // 检查路径是否包含encData字段
-        if (path.includes(".encData") || path === "encData") {
-          return obj;
-        }
-
-        // 检测 Data URL 或长 base64
-        if (
-          obj.startsWith("data:") ||
-          (obj.length > 100 &&
-            /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/.test(
-              obj
-            ))
-        ) {
-          return "[Base64 文件]";
-        }
-        return obj;
-      } else if (Array.isArray(obj)) {
-        return obj.map((item) => replaceBase64InObject(item, path));
-      } else if (typeof obj === "object" && obj !== null) {
-        const newObj = {};
-        for (const key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            const newPath = path ? `${path}.${key}` : key;
-            newObj[key] = replaceBase64InObject(obj[key], newPath);
-          }
-        }
-        return newObj;
-      }
-      return obj;
-    }
-
     if (responseData && typeof responseData === "object") {
-      const replacedData = replaceBase64InObject(responseData);
+      const replacedData = replaceBase64InDisplayObject(responseData);
       responseBodyContent = JSON.stringify(replacedData, null, 2);
     }
 
