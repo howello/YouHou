@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         API请求监控工具
 // @namespace    http://howe.com
-// @version      2.8.1
+// @version      2.8.2
 // @author       howe
 // @description  监控网页API请求并在新窗口中显示详细信息
 // @include      *://24.*
@@ -359,42 +359,48 @@
 
     const panel = document.createElement("div");
     panel.style.cssText =
-      "width:min(520px,92vw);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:16px 18px;";
+      "width:min(420px,92vw);background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:18px 20px;";
 
     const title = document.createElement("h3");
-    title.textContent = "配置国密解密参数";
-    title.style.cssText = "margin:0 0 12px;font-size:16px;";
+    title.textContent = "配置解密参数";
+    title.style.cssText = "margin:0 0 8px;font-size:16px;color:#222;";
     panel.appendChild(title);
 
     const hint = document.createElement("div");
-    hint.textContent = "用于解密请求/响应体中的 encData，参数保存在本地（GM 存储）。解密至少需要 CHNL_ID 与 SM4_KEY。";
-    hint.style.cssText = "color:#666;font-size:12px;margin-bottom:12px;line-height:1.5;";
+    hint.textContent = "用于解密请求/响应体中的 encData，参数保存在本地。";
+    hint.style.cssText = "color:#666;font-size:12px;margin-bottom:14px;line-height:1.5;";
     panel.appendChild(hint);
 
+    // 仅展示解密必需字段
     const fields = [
-      { key: "chnlId", label: "CHNL_ID（渠道 ID）", type: "text" },
-      { key: "sm4Key", label: "SM4_KEY", type: "text" },
-      { key: "appId", label: "appId", type: "text" },
-      { key: "prvKey", label: "PRV_KEY（私钥）", type: "text" },
-      { key: "pubKey", label: "PUB_KEY（公钥）", type: "text" },
-      { key: "plafPubKey", label: "PLAF_PUB_KEY（平台公钥）", type: "text" },
-      { key: "version", label: "version", type: "text" },
-      { key: "encType", label: "encType", type: "text" },
-      { key: "signType", label: "signType", type: "text" },
+      { key: "chnlId", label: "CHNL_ID", type: "text", placeholder: "渠道 ID" },
+      { key: "sm4Key", label: "SM4_KEY", type: "text", placeholder: "SM4 密钥" },
     ];
 
     const inputs = {};
     fields.forEach((f) => {
       const row = document.createElement("div");
-      row.style.cssText = "margin-bottom:10px;";
+      row.style.cssText = "margin-bottom:12px;";
       const lab = document.createElement("label");
       lab.textContent = f.label;
-      lab.style.cssText = "display:block;font-size:12px;color:#333;margin-bottom:4px;";
+      lab.style.cssText =
+        "display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:5px;";
       const input = document.createElement("input");
       input.type = f.type;
+      input.placeholder = f.placeholder || "";
       input.value = cfg[f.key] != null ? String(cfg[f.key]) : "";
+      input.spellcheck = false;
+      input.autocomplete = "off";
       input.style.cssText =
-        "width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:monospace;";
+        "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;font-family:ui-monospace,Consolas,monospace;outline:none;";
+      input.addEventListener("focus", () => {
+        input.style.borderColor = "#2196F3";
+        input.style.boxShadow = "0 0 0 3px rgba(33,150,243,0.15)";
+      });
+      input.addEventListener("blur", () => {
+        input.style.borderColor = "#d0d5dd";
+        input.style.boxShadow = "none";
+      });
       row.appendChild(lab);
       row.appendChild(input);
       panel.appendChild(row);
@@ -402,29 +408,29 @@
     });
 
     const actions = document.createElement("div");
-    actions.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:14px;";
+    actions.style.cssText = "display:flex;justify-content:flex-end;gap:8px;margin-top:16px;";
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";
     cancelBtn.textContent = "取消";
     cancelBtn.style.cssText =
-      "padding:6px 14px;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;";
+      "padding:7px 16px;border:1px solid #d0d5dd;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:13px;";
     cancelBtn.onclick = () => overlay.remove();
 
     const saveBtn = document.createElement("button");
     saveBtn.type = "button";
     saveBtn.textContent = "保存";
     saveBtn.style.cssText =
-      "padding:6px 14px;border:none;border-radius:4px;background:#2196F3;color:#fff;cursor:pointer;";
+      "padding:7px 16px;border:none;border-radius:6px;background:#2196F3;color:#fff;cursor:pointer;font-size:13px;";
     saveBtn.onclick = () => {
-      const next = {};
-      fields.forEach((f) => {
-        next[f.key] = inputs[f.key].value.trim();
-      });
-      if (!next.chnlId || !next.sm4Key) {
-        alert("请至少填写 CHNL_ID 与 SM4_KEY");
+      const chnlId = inputs.chnlId.value.trim();
+      const sm4Key = inputs.sm4Key.value.trim();
+      if (!chnlId || !sm4Key) {
+        alert("请填写 CHNL_ID 与 SM4_KEY");
         return;
       }
+      // 合并已有配置，避免清空历史字段
+      const next = Object.assign({}, getDecryptConfig(), { chnlId: chnlId, sm4Key: sm4Key });
       saveDecryptConfig(next);
       overlay.remove();
       alert("解密参数已保存");
@@ -1043,9 +1049,9 @@
       monitorWindow.close();
     }
 
-    // 创建新窗口
+    // 创建新窗口（更大默认尺寸，便于对照列表与详情）
     const windowFeatures =
-      "width=800,height=600,toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes";
+      "width=1280,height=800,toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes";
     monitorWindow = window.open("about:blank", "apiMonitorWindow", windowFeatures);
 
     if (!monitorWindow) {
@@ -1060,13 +1066,89 @@
       <head>
         <title>API请求监控工具</title>
         <style>
-          body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
+          *, *::before, *::after { box-sizing: border-box; }
+          html, body {
+            height: 100%;
             margin: 0;
-            padding: 10px;
-            background-color: #f5f5f5;
           }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            font-size: 13px;
+            color: #1f2937;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+          .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+          }
+          .app-header h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+            letter-spacing: 0.2px;
+          }
+          .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+          }
+          .tabs {
+            display: flex;
+            gap: 2px;
+            padding: 0 10px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+          }
+          .tab {
+            padding: 10px 14px;
+            cursor: pointer;
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+            user-select: none;
+            font-size: 13px;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+          }
+          .tab:hover {
+            color: #111827;
+            background: #f9fafb;
+          }
+          .tab.active {
+            color: #1565c0;
+            border-bottom-color: #2196F3;
+            font-weight: 600;
+            background: #f0f7ff;
+          }
+          .main-content {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 0;
+          }
+          button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1.2;
+          }
+          button:hover { filter: brightness(0.97); }
+          .btn-clear { background-color: #ff9800; color: #fff; }
+          .btn-close { background-color: #f44336; color: #fff; }
+          .btn-primary { background-color: #2196F3; color: #fff; }
           .copy-btn {
             padding: 2px 8px;
             font-size: 12px;
@@ -1086,84 +1168,120 @@
             color: #333;
             border-color: #bbb;
           }
-          .tabs {
+          #api-split {
             display: flex;
-            margin-bottom: 10px;
-            background-color: #e0e0e0;
-            border-radius: 4px 4px 0 0;
-            padding: 0 10px;
-          }
-          .tab {
-            padding: 8px 16px;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-          }
-          .tab.active {
-            border-bottom: 2px solid #2196F3;
-            background-color: white;
-          }
-          .controls {
-            margin-bottom: 10px;
-            text-align: right;
-            background-color: white;
-            padding: 10px;
-            border-radius: 0 0 4px 4px;
-          }
-          button {
-            padding: 4px 8px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: 5px;
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
           }
           #api-request-list {
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            max-height: 100vh;
+            width: 42%;
+            min-width: 280px;
+            height: 100%;
             overflow-y: auto;
-            margin-bottom: 10px;
+            border-right: 1px solid #e5e7eb;
+            background: #fff;
           }
           .api-request-item {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.12s;
           }
           .api-request-item .time-column {
-            width: 150px;
+            width: 148px;
+            flex-shrink: 0;
             margin-right: 10px;
-            color: #666;
+            color: #6b7280;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
           }
           .api-request-item:hover {
-            background-color: #f0f0f0;
+            background-color: #f3f4f6;
+          }
+          .api-request-item.is-selected {
+            background-color: #bbdefb !important;
+            font-weight: 600;
+            box-shadow: inset 3px 0 0 #2196F3;
+          }
+          .method-badge {
+            display: inline-block;
+            min-width: 42px;
+            text-align: center;
+            padding: 1px 6px;
+            margin-right: 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            background: #607d8b;
+            flex-shrink: 0;
+          }
+          .method-badge.get { background: #2e7d32; }
+          .method-badge.post { background: #1565c0; }
+          .method-badge.put { background: #ef6c00; }
+          .method-badge.delete { background: #c62828; }
+          .method-badge.patch { background: #6a1b9a; }
+          .status-text {
+            color: #4b5563;
+            font-size: 12px;
+            margin-left: 4px;
+            white-space: nowrap;
+          }
+          .url-text {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 12px;
+          }
+          .duration-text {
+            margin-left: 10px;
+            color: #6b7280;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
           }
           #api-detail-panel {
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            max-height: 100vh;
+            width: 58%;
+            height: 100%;
             overflow-y: auto;
-            padding: 10px;
+            padding: 12px 14px;
             display: none;
+            position: relative;
+            background: #fff;
+          }
+          #api-detail-panel .detail-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
           }
           #console-panel {
+            flex: 1;
+            min-height: 0;
             background-color: #1e1e1e;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            max-height: 100vh;
+            border: 1px solid #374151;
+            border-radius: 8px;
             overflow-y: auto;
-            padding: 10px;
+            padding: 10px 12px;
             color: #d4d4d4;
-            font-family: 'Courier New', monospace;
+            font-family: ui-monospace, Consolas, "Courier New", monospace;
+            font-size: 12px;
             display: none;
           }
           .console-log {
             margin-bottom: 4px;
-            padding: 4px;
-            border-radius: 2px;
+            padding: 4px 6px;
+            border-radius: 3px;
             white-space: pre-wrap;
             word-break: break-all;
           }
@@ -1172,18 +1290,51 @@
           .console-log.warn { color: #ff9800; background-color: rgba(255, 152, 0, 0.1); }
           .console-log.info { color: #2196f3; background-color: rgba(33, 150, 243, 0.1); }
           .console-log.debug { color: #9e9e9e; background-color: rgba(158, 158, 158, 0.1); }
+          .storage-panel {
+            flex: 1;
+            min-height: 0;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+          }
+          .storage-panel .storage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+          }
+          .storage-panel .storage-header h3 {
+            margin: 0;
+            font-size: 14px;
+          }
+          .storage-panel .storage-body {
+            flex: 1;
+            min-height: 0;
+            background-color: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+          }
           pre {
             white-space: pre-wrap;
             word-wrap: break-word;
-            background-color: #f8f8f8;
-            padding: 8px;
-            border-radius: 4px;
+            background-color: #f8fafc;
+            border: 1px solid #eef2f7;
+            padding: 10px;
+            border-radius: 6px;
             overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.45;
+            margin: 0 0 8px 0;
           }
           h3, h4 {
-            margin-top: 15px;
+            margin-top: 14px;
             margin-bottom: 8px;
+            color: #111827;
           }
+          h3:first-child, h4:first-child { margin-top: 0; }
           #back-to-top-btn {
             position: fixed;
             bottom: 20px;
@@ -1199,9 +1350,10 @@
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             z-index: 1000;
             transition: opacity 0.3s;
+            padding: 0;
           }
           #back-to-top-btn:hover {
             background-color: #1976D2;
@@ -1265,14 +1417,29 @@
             display: block;
             margin: auto;
           }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          table th, table td {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+          }
+          table th {
+            background: #f9fafb;
+            color: #4b5563;
+            font-size: 12px;
+          }
         </style>
       </head>
       <body>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="app-header">
           <h2>API请求监控工具</h2>
           <div class="controls">
-            <button id="clear-history-button" style="background-color: #ff9800; color: white;">清空历史</button>
-            <button id="close-window-button" style="background-color: #f44336; color: white;">关闭窗口</button>
+            <button id="clear-history-button" class="btn-clear">清空历史</button>
+            <button id="close-window-button" class="btn-close">关闭窗口</button>
           </div>
         </div>
         <div class="tabs">
@@ -1282,34 +1449,38 @@
           <div class="tab" id="sessionstorage-tab">SessionStorage</div>
           <div class="tab" id="cookie-tab">Cookie</div>
         </div>
-        <div style="display: flex; height: calc(100vh - 140px); width: 100%;">
-          <div id="api-request-list" style="width: 50%; height: 100%; flex: 1; border-right: 1px solid #ccc; overflow-y: auto;"></div>
-          <div id="api-detail-panel" style="width: 50%; height: 100%; flex: 1; overflow-y: auto; display: none; position: relative;">
-            <button id="close-detail-button" style="background-color: #f44336; color: white;">关闭详情</button>
-            <button id="back-to-top-btn" title="回到顶部">↑</button>
+        <div class="main-content">
+          <div id="api-split">
+            <div id="api-request-list"></div>
+            <div id="api-detail-panel">
+              <div class="detail-toolbar">
+                <button id="close-detail-button" class="btn-close">关闭详情</button>
+              </div>
+              <button id="back-to-top-btn" title="回到顶部">↑</button>
+            </div>
           </div>
-        </div>
-        <div id="console-panel" style="height: calc(100vh - 150px); overflow-y: auto;"></div>
-        <div id="localstorage-panel" style="display: none; height: calc(100vh - 130px); overflow-y: auto;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <h3>LocalStorage 内容</h3>
-            <button id="refresh-localstorage" style="background-color: #2196F3; color: white;">刷新</button>
+          <div id="console-panel"></div>
+          <div id="localstorage-panel" class="storage-panel">
+            <div class="storage-header">
+              <h3>LocalStorage 内容</h3>
+              <button id="refresh-localstorage" class="btn-primary">刷新</button>
+            </div>
+            <div id="localstorage-content" class="storage-body"></div>
           </div>
-          <div id="localstorage-content" style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 10px; height: calc(100% - 100px); overflow-y: auto;"></div>
-        </div>
-        <div id="sessionstorage-panel" style="display: none; height: calc(100vh - 130px); overflow-y: auto;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <h3>SessionStorage 内容</h3>
-            <button id="refresh-sessionstorage" style="background-color: #2196F3; color: white;">刷新</button>
+          <div id="sessionstorage-panel" class="storage-panel">
+            <div class="storage-header">
+              <h3>SessionStorage 内容</h3>
+              <button id="refresh-sessionstorage" class="btn-primary">刷新</button>
+            </div>
+            <div id="sessionstorage-content" class="storage-body"></div>
           </div>
-          <div id="sessionstorage-content" style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 10px; height: calc(100% - 100px); overflow-y: auto;"></div>
-        </div>
-        <div id="cookie-panel" style="display: none; height: calc(100vh - 130px); overflow-y: auto;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <h3>Cookie 内容</h3>
-            <button id="refresh-cookie" style="background-color: #2196F3; color: white;">刷新</button>
+          <div id="cookie-panel" class="storage-panel">
+            <div class="storage-header">
+              <h3>Cookie 内容</h3>
+              <button id="refresh-cookie" class="btn-primary">刷新</button>
+            </div>
+            <div id="cookie-content" class="storage-body"></div>
           </div>
-          <div id="cookie-content" style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 10px; height: calc(100% - 100px); overflow-y: auto;"></div>
         </div>
       </body>
       </html>
@@ -1633,7 +1804,7 @@
     // 根据标签名显示对应内容
     if (tabName === "api") {
       apiTab.classList.add("active");
-      // 显示flex容器，包含apiList和apiDetail
+      // 显示 flex 容器，包含 apiList 和 apiDetail
       flexContainer.style.display = "flex";
     } else if (tabName === "console") {
       consoleTab.classList.add("active");
@@ -1641,15 +1812,16 @@
       updateConsoleLogs();
     } else if (tabName === "localstorage") {
       localStorageTab.classList.add("active");
-      localStoragePanel.style.display = "block";
+      // storage-panel 依赖 flex 列布局填满高度
+      localStoragePanel.style.display = "flex";
       updateLocalStorageDisplay();
     } else if (tabName === "sessionstorage") {
       sessionStorageTab.classList.add("active");
-      sessionStoragePanel.style.display = "block";
+      sessionStoragePanel.style.display = "flex";
       updateSessionStorageDisplay();
     } else if (tabName === "cookie") {
       cookieTab.classList.add("active");
-      cookiePanel.style.display = "block";
+      cookiePanel.style.display = "flex";
       updateCookieDisplay();
     }
   }
@@ -2329,48 +2501,47 @@
     item.className = "api-request-item";
     item.dataset.requestId = String(request.id);
 
-    // 如果是当前打开的请求，添加高亮样式
+    // 选中高亮优先；否则按状态着色
     if (currentlyOpenRequestId === request.id) {
-      item.style.fontWeight = "bold";
-      item.style.backgroundColor = "#bbdefb";
-    } else {
-      // 根据状态设置颜色和图标
-      if (request.status === "ERROR") {
-        item.style.backgroundColor = "#ffebee";
-      } else if (typeof request.status === "number" && request.status >= 400) {
-        item.style.backgroundColor = "#fff8e1";
-      } else if (
-        typeof request.status === "number" &&
-        request.status >= 200 &&
-        request.status < 300
-      ) {
-        item.style.backgroundColor = "#e8f5e9";
-      }
+      item.classList.add("is-selected");
+    } else if (request.status === "ERROR") {
+      item.style.backgroundColor = "#ffebee";
+    } else if (typeof request.status === "number" && request.status >= 400) {
+      item.style.backgroundColor = "#fff8e1";
+    } else if (
+      typeof request.status === "number" &&
+      request.status >= 200 &&
+      request.status < 300
+    ) {
+      item.style.backgroundColor = "#e8f5e9";
     }
 
     const contentContainer = monitorWindow.document.createElement("div");
     contentContainer.style.display = "flex";
     contentContainer.style.alignItems = "center";
+    contentContainer.style.width = "100%";
+    contentContainer.style.minWidth = "0";
+    contentContainer.style.gap = "4px";
 
     const statusIcon = monitorWindow.document.createElement("span");
     if (request.status === "ERROR") {
       statusIcon.textContent = "❌";
-      statusIcon.style.color = "#d32f2f";
+      statusIcon.title = "错误";
     } else if (typeof request.status === "number" && request.status >= 400) {
       statusIcon.textContent = "⚠️";
-      statusIcon.style.color = "#ff8f00";
+      statusIcon.title = String(request.status);
     } else if (
       typeof request.status === "number" &&
       request.status >= 200 &&
       request.status < 300
     ) {
       statusIcon.textContent = "✅";
-      statusIcon.style.color = "#388e3c";
+      statusIcon.title = String(request.status);
     } else {
       statusIcon.textContent = "⏱️";
-      statusIcon.style.color = "#757575";
+      statusIcon.title = "进行中";
     }
-    statusIcon.style.marginRight = "5px";
+    statusIcon.style.flexShrink = "0";
     contentContainer.appendChild(statusIcon);
 
     const timeColumn = monitorWindow.document.createElement("span");
@@ -2378,20 +2549,29 @@
     timeColumn.textContent = request.timestamp;
     contentContainer.appendChild(timeColumn);
 
-    const infoSpan = monitorWindow.document.createElement("span");
-    infoSpan.textContent = `${request.method} ${getShortUrl(request.url)} (${
-      request.status || "PENDING"
-    })`;
-    infoSpan.style.flex = "1";
-    contentContainer.appendChild(infoSpan);
+    const method = String(request.method || "GET").toUpperCase();
+    const methodBadge = monitorWindow.document.createElement("span");
+    methodBadge.className = "method-badge " + method.toLowerCase();
+    methodBadge.textContent = method;
+    contentContainer.appendChild(methodBadge);
 
-    const timeSpan = monitorWindow.document.createElement("span");
-    timeSpan.textContent = `${
-      request.duration ? Math.round(request.duration) + "ms" : ""
-    }`;
-    timeSpan.style.marginLeft = "10px";
-    timeSpan.style.color = "#666";
-    contentContainer.appendChild(timeSpan);
+    const urlSpan = monitorWindow.document.createElement("span");
+    urlSpan.className = "url-text";
+    urlSpan.textContent = getShortUrl(request.url);
+    urlSpan.title = request.url;
+    contentContainer.appendChild(urlSpan);
+
+    const statusText = monitorWindow.document.createElement("span");
+    statusText.className = "status-text";
+    statusText.textContent = String(request.status || "PENDING");
+    contentContainer.appendChild(statusText);
+
+    const durationSpan = monitorWindow.document.createElement("span");
+    durationSpan.className = "duration-text";
+    durationSpan.textContent = request.duration
+      ? Math.round(request.duration) + "ms"
+      : "";
+    contentContainer.appendChild(durationSpan);
 
     item.appendChild(contentContainer);
 
@@ -3103,12 +3283,32 @@
       { decryptSource: extractEncPayload(request.responseBody) }
     );
 
-    // 清空详情面板并添加新内容
-    // 保留关闭按钮和回到顶部按钮
+    // 清空详情内容，保留工具栏与回到顶部按钮
+    const detailToolbar = detailPanel.querySelector(".detail-toolbar");
     const closeButton = detailPanel.querySelector("#close-detail-button");
     const backToTopBtn = detailPanel.querySelector("#back-to-top-btn");
     detailPanel.innerHTML = "";
-    detailPanel.appendChild(closeButton);
+
+    let toolbar = detailToolbar;
+    if (!toolbar) {
+      toolbar = doc.createElement("div");
+      toolbar.className = "detail-toolbar";
+    }
+    if (closeButton && !toolbar.contains(closeButton)) {
+      toolbar.appendChild(closeButton);
+    } else if (!closeButton) {
+      const btn = doc.createElement("button");
+      btn.id = "close-detail-button";
+      btn.className = "btn-close";
+      btn.textContent = "关闭详情";
+      btn.addEventListener("click", () => {
+        currentlyOpenRequestId = null;
+        detailPanel.style.display = "none";
+        updateRequestList();
+      });
+      toolbar.appendChild(btn);
+    }
+    detailPanel.appendChild(toolbar);
     if (backToTopBtn) {
       detailPanel.appendChild(backToTopBtn);
     }
